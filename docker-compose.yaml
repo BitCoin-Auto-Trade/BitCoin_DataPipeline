@@ -1,0 +1,51 @@
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: bitcoin_redis
+    ports:
+      - "6379:6379"
+    networks:
+      - bitcoin_network
+
+  collector:
+    build: ./collector
+    container_name: bitcoin_collector
+    depends_on:
+      - redis
+    env_file:
+      - .env
+    volumes:
+      - ./keys/gcp-key.json:/app/gcp-key.json:ro
+      - ./shared:/app/shared:ro
+    networks:
+      - bitcoin_network
+
+  # processor:
+  #   build: ./processor
+  #   container_name: bitcoin_processor
+  #   depends_on:
+  #     - redis
+  #   env_file:
+  #     - .env
+  #   volumes:
+  #     - ./keys/gcp-key.json:/app/gcp-key.json:ro
+  #     - ./shared:/app/shared:ro
+  #   networks:
+  #     - bitcoin_network
+
+  # loader:
+  #   build: ./loader
+  #   container_name: bitcoin_loader
+  #   depends_on:
+  #     - redis
+  #   env_file:
+  #     - .env
+  #   volumes:
+  #     - ./keys/gcp-key.json:/app/gcp-key.json:ro
+  #     - ./shared:/app/shared:ro
+  #   networks:
+  #     - bitcoin_network
+
+networks:
+  bitcoin_network:
+    driver: bridge
