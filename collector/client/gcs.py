@@ -1,7 +1,7 @@
 import json
 from google.cloud import storage
 from google.oauth2 import service_account
-from shared.env import GCP_PROJECT_ID, GCS_BUCKET, GCP_CREDENTIALS_PATH
+from shared.utils.env import GCP_PROJECT_ID, GCS_BUCKET, GCP_CREDENTIALS_PATH
 
 
 class GCSClient:

@@ -2,3 +2,5 @@ python-binance == 1.0.34
 websockets == 16.0
 google-cloud-storage == 3.7.0
 redis == 7.1.0
+loguru == 0.7.3
+pydantic == 2.10.5

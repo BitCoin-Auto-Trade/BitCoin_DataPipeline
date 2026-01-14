@@ -1,27 +1,24 @@
 import asyncio
-
+from shared.utils.logger import setup_logger
 from client.gcs import GCSClient
 from client.redis import RedisClient
-
-from worker.binance_futures import BinanceFuturesWorker
-from worker.binance_spot import BinanceSpotWorker
+from collector.worker.binance_ws import BinanceWebsocketWorker
 
 
 async def main():
-    # 1. 클라이언트 초기화
+    setup_logger("collector")
+
     redis = RedisClient()
-    gcs = GCSClient()
+    gcs = GCSClient()  # GCS는 나중에 분단위 API 호출 데이터 저장용
 
-    # 2. 워커 생성 (클라이언트를 주입)
-    binance_futures = BinanceFuturesWorker(redis=redis, gcs=gcs)
-    binance_spot = BinanceSpotWorker(redis=redis, gcs=gcs)
+    # Spot & Futures Ticker Worker
+    spot_worker = BinanceWebsocketWorker(market="spot", redis=redis, gcs=gcs)
+    futures_worker = BinanceWebsocketWorker(market="futures", redis=redis, gcs=gcs)
 
-    # 3. 동시에 실행
     await asyncio.gather(
-        binance_futures.run(),
-        binance_spot.run()
+        spot_worker.run(),
+        futures_worker.run()
     )
-
 
 if __name__ == "__main__":
     asyncio.run(main())

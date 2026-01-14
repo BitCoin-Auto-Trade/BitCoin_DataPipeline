@@ -61,35 +61,30 @@ raw -> Redis
 
 ### 1. Redis 설계 (실시간 메모리 데이터)
 
-| 구분 | 데이터 항목 | Key/Table Name | 데이터 구조 | 설명 |
-|------|------------|----------------|------------|------|
-| **기본 시장 데이터** | OHLCV | `ticker:{symbol}` | Hash | 실시간 시가, 고가, 저가, 종가, 거래량 (현재 진행 중인 캔들) |
-| | Aggregated Trades | `trades:{symbol}` | Stream | 틱 단위 체결 데이터 (시장가 매수/매도 구분) |
-| | CVD | `cvd:{symbol}` | String/Float | 누적 볼륨 델타 (시장가 매수량 - 매도량, 에너지 방향 확인) |
-| **호가창 데이터** | Order Book (L2) | `orderbook:{symbol}` | Sorted Set | 실시간 상위 20~50호가의 가격과 잔량 |
-| | Spread | `orderbook:spread:{symbol}` | String/Float | 최우선 매수/매도 호가 간격 (유동성 부족 감지) |
-| | Imbalance & Wall | `ob_metrics:{symbol}` | Hash | 매수/매도 거미줄 두께 차이, 대형 주문(세력 벽) 위치 |
-| **선물 시장 데이터** | Open Interest | `futures:oi:{symbol}` | String/Float | 미체결 약정 총량 (추세의 지속성 판단) |
-| | Funding Rate | `futures:funding:{symbol}` | String/Float | 롱/숏 과열도 측정 펀딩비 |
-| | Liquidations | `futures:liq:{symbol}` | Hash | 실시간 롱/숏 청산액 (스퀴즈 포착용) |
-| | Long/Short Ratio | `futures:ratio:{symbol}` | String/Float | 거래소 내 개인/기관 포지션 비율 |
-| **거시경제 데이터** | DXY & 나스닥 | `macro:dxy` / `macro:nasdaq` | Hash | 달러 인덱스 & 나스닥 선물 1분 단위 시세 |
-| | USDT Dominance | `macro:usdt_d` | String/Float | 테더 도미넌스 (현금화 여부 지표) |
-| | Fear & Greed | `macro:fear_greed` | String/Float | 시장 과열/공포 수치 |
-| **온체인 데이터** | Whale Alert | `whale:latest` | Stream | 최근 대량 거래소 입출금 트랜잭션 |
-| **뉴스/감성 데이터** | Sentiment Score | `sentiment:latest` | String/Float | Gemini 분석 최근 5분 평균 감성 점수 (-1 ~ 1) |
-| | News Feed | `news:feed` | Stream | CryptoPanic API & 주요 트위터(X) 피드 실시간 수집 |
+| 구분 | 데이터 항목 | Redis Key (네이밍 규칙) | 데이터 구조 | 설명 및 선정 이유 |
+|------|------------|-------------------------|------------|------------------|
+| **기본 시장** | Aggregated Trades | `raw:trades:{symbol}` | Stream | 필수. 모든 틱을 순서대로 저장. Processor가 읽어서 CVD 계산. |
+| | OHLCV (현재) | `state:ticker:{market}:{symbol}` | Hash | 현재 진행 중인 캔들 데이터 (시/고/저/종/거). |
+| | CVD (실시간) | `proc:metrics:{symbol}` | Hash | (필드: cvd) 여러 지표와 함께 Hash에 넣어 한 번에 조회. |
+| **호가창** | Order Book (L2) | `raw:orderbook:{symbol}` | Hash (JSON) | ZSET보다 JSON 직렬화가 대역폭 효율 및 복구 속도가 빠름 (상위 50호가). |
+| | OB Metrics | `proc:metrics:{symbol}` | Hash | (필드: spread, imbalance, wall_price, wall_size) 가공된 모든 호가 지표. |
+| **선물 특화** | Liquidations | `raw:liq:{symbol}` | Stream | 중요. 청산은 '사건'이므로 Stream으로 쌓아서 빈도/규모 측정. |
+| | Futures Info | `state:futures:{symbol}` | Hash | OI(미체결), 펀딩비, L/S Ratio 통합 관리. (REST API 주기적 갱신) |
+| **거시/온체인** | Whale Alert | `raw:whale` | Stream | 대량 입출금 알림. 발생 시각과 규모 저장. |
+| | Macro Indicators | `state:macro` | Hash | DXY, 나스닥, USDT.D를 한 키에 통합하여 네트워크 오버헤드 감소. |
+| | Fear & Greed | `state:sentiment:fng` | String | 일 단위 데이터이므로 가장 단순하게 저장. |
+| **뉴스/감성** | News Feed | `raw:news` | Stream | 뉴스 본문, 출처, 원문 수집용. |
+| | Sentiment Score | `proc:sentiment` | Hash | (필드: latest_score, ma_5m_score) Gemini가 분석한 점수. |
+
 
 ### 2. BigQuery 설계 (역사적 분석용 데이터)
 
-| 구분 | 데이터 항목 | Table Name | 파티션/클러스터 | 상세 설명 |
-|------|------------|-----------|----------------|----------|
-| **기본 시장 데이터** | OHLCV | `hist_ohlcv` | timestamp (Day) | 1분/1시간 단위 과거 시세 데이터 (백테스팅용) |
-| | Aggregated Trades | `hist_trades_raw` | symbol, timestamp | 틱 단위 체결 로그 (CVD 계산 및 복기 분석용) |
-| **호가창 데이터** | Order Book Snapshot | `hist_orderbook_snapshot` | timestamp (Hour) | 1초~10초 단위 호가창 스냅샷 (벽 감지 패턴 분석) |
-| | Imbalance History | `hist_ob_imbalance` | timestamp (Day) | 호가 불균형 이력 (급등락 전조 현상 학습) |
-| **선물 시장 데이터** | OI & Funding & Liq | `hist_futures_metrics` | timestamp (Day) | 미체결약정, 펀딩비, 청산 이력 시간대별 기록 |
-| | Long/Short Ratio | `hist_long_short_ratio` | timestamp (Day) | 포지션 비율 변화 추이 (포지션 쏠림 분석) |
-| **거시경제 데이터** | Macro Indicators | `hist_macro_indicators` | timestamp (Month) | DXY, 나스닥, USDT.D, Fear & Greed 히스토리 |
-| **온체인 데이터** | Whale Alerts | `hist_whale_alerts` | timestamp | 거래소 입출금 대량 트랜잭션 기록 (매도 압력/보유 의지 분석) |
-| **뉴스/감성 데이터** | News & Sentiment | `hist_news_sentiment` | timestamp (Day) | CryptoPanic, 트위터 피드, Gemini 감성 점수 이력 |
+| 구분 | 테이블명 (Table Name) | 파티션 (Partition) | 클러스터 (Cluster) | 주요 컬럼 및 분석 용도 |
+|------|----------------------|-------------------|--------------------|----------------------|
+| **시장** | `market_ohlcv` | timestamp (Day) | symbol, interval | 1m, 1h 단위 시세. 전략의 기본 수익률 계산용. |
+| | `market_trades_raw` | timestamp (Day) | symbol | 가장 대용량. 틱 단위 체결 데이터. CVD 복기 및 체결 강도 분석용. |
+| **호가** | `market_orderbook_snapshot` | timestamp (Day) | symbol | 1~10초 단위 스냅샷 + Imbalance, Spread 포함. 호가창 벽 붕괴 패턴 분석. |
+| **선물** | `futures_metrics_history` | timestamp (Day) | symbol | OI, 펀딩비, L/S Ratio 통합. 상관관계 분석을 위해 한 테이블에 적재. |
+| **사건** | `futures_liquidations` | timestamp (Day) | symbol | 청산 데이터 전용. 급등락(Squeeze) 시점의 청산 규모 분석용. |
+| **거시** | `macro_onchain_history` | timestamp (Month) | indicator_name | DXY, 나스닥, USDT.D, Whale Alert 통합. 지표별 비트코인 커플링 지수 계산. |
+| **감성** | `news_sentiment_history` | timestamp (Day) | source | 뉴스 원문 + Gemini 점수. 호재/악재 점수와 가격 변동의 상관관계 분석. |
