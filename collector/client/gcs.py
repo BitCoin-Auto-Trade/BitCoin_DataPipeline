@@ -12,7 +12,7 @@ class GCSClient:
         self.client = storage.Client(project=GCP_PROJECT_ID, credentials=credentials)
         self.bucket = self.client.bucket(GCS_BUCKET)
 
-    def upload_json(self, blob_name: str, data: dict) -> None:
+    def upload_json(self, blob_name: str, data: dict):
         blob = self.bucket.blob(blob_name)
         blob.upload_from_string(
             json.dumps(data, ensure_ascii=False, indent=2),

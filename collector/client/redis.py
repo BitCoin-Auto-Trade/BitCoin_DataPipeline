@@ -11,12 +11,12 @@ class RedisClient:
             decode_responses=True
         )
 
-    def set_json(self, key: str, data: dict, ex: int = None) -> None:
-        """JSON 문자열로 저장 (옵션: TTL)"""
+    def set_json(self, key: str, data: dict, ex: int) -> None:
+        """JSON 문자열로 저장"""
         self.client.set(key, json.dumps(data, ensure_ascii=False), ex=ex)
 
-    def set_hash(self, key: str, data: dict, ex: int = None) -> None:
-        """Hash로 저장 (옵션: TTL)"""
+    def set_hash(self, key: str, data: dict, ex: int) -> None:
+        """Hash로 저장"""
         self.client.hset(key, mapping=data)
         if ex:
             self.client.expire(key, ex)

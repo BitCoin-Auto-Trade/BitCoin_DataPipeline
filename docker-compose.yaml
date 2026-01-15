@@ -15,7 +15,7 @@ services:
     env_file:
       - .env
     volumes:
-      - ./keys/gcp-key.json:/app/gcp-key.json:ro
+      - ./keys/gcp-key.json:/keys/gcp-key.json:ro
       - ./shared:/app/shared:ro
     networks:
       - bitcoin_network

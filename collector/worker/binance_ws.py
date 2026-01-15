@@ -2,18 +2,13 @@ import asyncio
 import json
 import websockets
 from typing import Literal
-from shared.utils.constants import SYMBOLS
 from shared.utils.logger import get_logger
-from shared.models.raw import RawTicker
+from shared.utils.constants import SYMBOL, BINANCE_WS_URLS
+from shared.models.raw import RawKline, RawAggTrade, RawOrderBook, RawSpotOrderBook, RawLiquidation
 
 
 class BinanceWebsocketWorker:
     """Binance WebSocket Worker"""
-
-    URLS = {
-        "spot": "wss://stream.binance.com:9443/ws",
-        "futures": "wss://fstream.binance.com/ws"
-    }
 
     def __init__(self, market: Literal["spot", "futures"], redis, gcs):
         self.market = market
@@ -21,61 +16,73 @@ class BinanceWebsocketWorker:
         self.gcs = gcs
         self.logger = get_logger(market.capitalize())
 
-    async def run(self):
-        self.logger.info(f"Starting {self.market} Websocket worker...")
+    def _get_streams(self) -> list:
+        streams = [
+            f"{SYMBOL}@kline_1m",
+            f"{SYMBOL}@aggTrade",
+            f"{SYMBOL}@depth20@100ms",
+        ]
+        if self.market == "futures":
+            streams.append("!forceOrder@arr")
+        return streams
 
-        streams = [f"{symbol}@ticker" for symbol in SYMBOLS]
-        url = f"{self.URLS[self.market]}/{'/'.join(streams)}"
+    async def run(self):
+        streams = self._get_streams()
+        url = f"{BINANCE_WS_URLS[self.market]}/{'/'.join(streams)}"
+        self.logger.info(f"Connecting to {len(streams)} streams...")
 
         while True:
             try:
                 async with websockets.connect(url) as ws:
-                    self.logger.info(f"Connected! Streaming {len(SYMBOLS)} symbols")
-
+                    self.logger.info("Connected!")
                     async for msg in ws:
-                        try:
-                            data = json.loads(msg)
-
-                            # 멀티 스트림 응답 처리
-                            if "data" in data:
-                                data = data["data"]
-
-                            if data.get("e") == "24hrTicker":
-                                self._process_ticker(data)
-
-                        except (json.JSONDecodeError, KeyError) as e:
-                            self.logger.warning(f"Invalid data format: {e}")
-                            continue
+                        self._handle_message(msg)
 
             except websockets.exceptions.ConnectionClosed:
-                self.logger.warning("Connection closed. Reconnecting in 5s...")
-                await asyncio.sleep(5)
-            except Exception as e:
-                self.logger.error(f"Unexpected error: {e}")
-                await asyncio.sleep(5)
+                self.logger.warning("Connection closed. Reconnecting in 3s...")
+                await asyncio.sleep(3)
 
-    def _process_ticker(self, data: dict):
-        """Ticker 데이터 검증 및 Redis 저장"""
-        try:
-            ticker = RawTicker(
-                market=self.market,
-                symbol=data["s"],
-                price=data["c"],
-                high=data["h"],
-                low=data["l"],
-                volume=data["v"],
-                timestamp=data["E"]
-            )
+    def _handle_message(self, msg: str):
+        data = json.loads(msg)
+        payload = data["data"] if "stream" in data else data
+        event_type = payload.get("e")
 
-            # Redis Hash에 저장 (TTL 60초)
-            self.redis.set_hash(
-                key=ticker.redis_key(),
-                data=ticker.to_redis_hash(),
-                ex=60
-            )
+        if event_type == "kline":
+            self._process_kline(payload)
+        elif event_type == "aggTrade":
+            self._process_aggtrade(payload)
+        elif event_type == "depthUpdate":
+            self._process_orderbook(payload)
+        elif "lastUpdateId" in payload:
+            self._process_spot_orderbook(payload)
+        elif event_type == "forceOrder":
+            self._process_liquidation(payload)
 
-            # 로그는 DEBUG 레벨로 (과다 로깅 방지)
-            self.logger.debug(f"{ticker.symbol}: ${ticker.price}")
+    def _process_kline(self, data: dict):
+        k = data["k"]
+        raw = RawKline(**k)
+        self.redis.set_hash(f"raw:{self.market}:kline:{SYMBOL}", raw.to_dict(), ex=30)
+        if raw.is_closed:
+            self.logger.debug(f"[KLINE] Close: {raw.close_price}")
 
-        except (KeyError, ValueError) as e:
-            self.logger.warning(f"Failed to process ticker: {e}")
+    def _process_aggtrade(self, data: dict):
+        raw = RawAggTrade(**data)
+        self.redis.set_hash(f"raw:{self.market}:aggtrade:{SYMBOL}", raw.to_dict(), ex=30)
+        side = "SELL" if raw.is_buyer_maker else "BUY"
+        self.logger.debug(f"[TRADE] {side} {raw.quantity} @ {raw.price}")
+
+    def _process_orderbook(self, data: dict):
+        raw = RawOrderBook(**data)
+        self.redis.set_hash(f"raw:{self.market}:orderbook:{SYMBOL}", raw.to_dict(), ex=30)
+        self.logger.debug(f"[BOOK] Bid: {raw.bids[0][0]} | Ask: {raw.asks[0][0]}")
+
+    def _process_spot_orderbook(self, data: dict):
+        raw = RawSpotOrderBook(**data)
+        self.redis.set_hash(f"raw:{self.market}:orderbook:{SYMBOL}", raw.to_dict(), ex=30)
+        self.logger.debug(f"[BOOK] Bid: {raw.bids[0][0]} | Ask: {raw.asks[0][0]}")
+
+    def _process_liquidation(self, data: dict):
+        o = data["o"]
+        raw = RawLiquidation(**o)
+        self.redis.set_hash(f"raw:{self.market}:liquidation:{raw.symbol.lower()}", raw.to_dict(), ex=30)
+        self.logger.debug(f"[LIQ] {raw.side} {raw.quantity} @ {raw.price}")
