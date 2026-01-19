@@ -16,7 +16,7 @@ class BinanceWebsocketWorker:
         self.gcs = gcs
         self.logger = get_logger(market.capitalize())
 
-    def _get_streams(self) -> list:
+    def _get_streams(self):
         streams = [
             f"{SYMBOL}@kline_1m",
             f"{SYMBOL}@aggTrade",
@@ -58,31 +58,42 @@ class BinanceWebsocketWorker:
         elif event_type == "forceOrder":
             self._process_liquidation(payload)
 
+    def _publish(self, data_type: str, symbol: str = SYMBOL):
+        """데이터 변경 이벤트 발행"""
+        self.redis.publish(f"data:{self.market}:{data_type}", symbol)
+
     def _process_kline(self, data: dict):
         k = data["k"]
         raw = RawKline(**k)
         self.redis.set_hash(f"raw:{self.market}:kline:{SYMBOL}", raw.to_dict(), ex=30)
+        self._publish("kline")
         if raw.is_closed:
+            self._publish("kline_closed")
             self.logger.debug(f"[KLINE] Close: {raw.close_price}")
 
     def _process_aggtrade(self, data: dict):
         raw = RawAggTrade(**data)
         self.redis.set_hash(f"raw:{self.market}:aggtrade:{SYMBOL}", raw.to_dict(), ex=30)
-        side = "SELL" if raw.is_buyer_maker else "BUY"
-        self.logger.debug(f"[TRADE] {side} {raw.quantity} @ {raw.price}")
+        self._publish("aggtrade")
+        self.logger.debug(f"[TRADE] {'SELL' if raw.is_buyer_maker else 'BUY'} {raw.quantity} @ {raw.price}")
 
     def _process_orderbook(self, data: dict):
         raw = RawOrderBook(**data)
         self.redis.set_hash(f"raw:{self.market}:orderbook:{SYMBOL}", raw.to_dict(), ex=30)
+        self._publish("orderbook")
         self.logger.debug(f"[BOOK] Bid: {raw.bids[0][0]} | Ask: {raw.asks[0][0]}")
 
     def _process_spot_orderbook(self, data: dict):
         raw = RawSpotOrderBook(**data)
         self.redis.set_hash(f"raw:{self.market}:orderbook:{SYMBOL}", raw.to_dict(), ex=30)
+        self._publish("orderbook")
         self.logger.debug(f"[BOOK] Bid: {raw.bids[0][0]} | Ask: {raw.asks[0][0]}")
 
     def _process_liquidation(self, data: dict):
         o = data["o"]
         raw = RawLiquidation(**o)
-        self.redis.set_hash(f"raw:{self.market}:liquidation:{raw.symbol.lower()}", raw.to_dict(), ex=30)
+        if raw.symbol.lower() != SYMBOL:
+            return
+        self.redis.set_hash(f"raw:{self.market}:liquidation:{SYMBOL}", raw.to_dict(), ex=30)
+        self._publish("liquidation")
         self.logger.debug(f"[LIQ] {raw.side} {raw.quantity} @ {raw.price}")

@@ -1,16 +1,21 @@
-from pydantic import BaseModel, Field, AliasChoices, ConfigDict
-from typing import List, Optional
 import json
+from typing import List
+from pydantic import BaseModel, Field, ConfigDict
+
 
 class BaseRaw(BaseModel):
+    """Raw 데이터 기본 모델"""
     model_config = ConfigDict(populate_by_name=True)
 
-    def to_dict(self) -> dict:
-        return {k: (json.dumps(v) if isinstance(v, (list, dict)) else str(v))
-                for k, v in self.model_dump().items()}
+    def to_dict(self):
+        return {
+            k: (json.dumps(v) if isinstance(v, (list, dict)) else str(v))
+            for k, v in self.model_dump().items()
+        }
+
 
 class RawKline(BaseRaw):
-    """OHLCV (kline_1m) - WebSocket 'k' 내부 데이터 기준"""
+    """OHLCV (kline_1m) - WebSocket 'k' 내부 데이터"""
     symbol: str = Field(alias="s")
     interval: str = Field(alias="i")
     open_price: str = Field(alias="o")
@@ -28,6 +33,7 @@ class RawKline(BaseRaw):
     first_trade_id: int = Field(alias="f")
     last_trade_id: int = Field(alias="L")
 
+
 class RawAggTrade(BaseRaw):
     """집계 체결 (aggTrade)"""
     symbol: str = Field(alias="s")
@@ -39,8 +45,9 @@ class RawAggTrade(BaseRaw):
     timestamp: int = Field(alias="T")
     is_buyer_maker: bool = Field(alias="m")
 
+
 class RawOrderBook(BaseRaw):
-    """호가창 스냅샷 (depth20) - Futures depthUpdate 기준"""
+    """호가창 스냅샷 - Futures depthUpdate"""
     symbol: str = Field(alias="s")
     bids: List[List[str]] = Field(alias="b")
     asks: List[List[str]] = Field(alias="a")
@@ -52,13 +59,14 @@ class RawOrderBook(BaseRaw):
 
 
 class RawSpotOrderBook(BaseRaw):
-    """호가창 스냅샷 (depth20) - Spot 기준"""
+    """호가창 스냅샷 - Spot"""
     last_update_id: int = Field(alias="lastUpdateId")
     bids: List[List[str]]
     asks: List[List[str]]
 
+
 class RawLiquidation(BaseRaw):
-    """강제 청산 (forceOrder) - 'o' 내부 데이터 기준"""
+    """강제 청산 (forceOrder) - 'o' 내부 데이터"""
     symbol: str = Field(alias="s")
     side: str = Field(alias="S")
     order_type: str = Field(alias="o")
@@ -71,6 +79,7 @@ class RawLiquidation(BaseRaw):
     filled_qty: str = Field(alias="z")
     timestamp: int = Field(alias="T")
 
+
 class RawFundingRate(BaseRaw):
     """마크 가격 & 펀딩비 (REST: premiumIndex)"""
     symbol: str = Field(alias="symbol")
@@ -82,14 +91,16 @@ class RawFundingRate(BaseRaw):
     next_funding_time: int = Field(alias="nextFundingTime")
     timestamp: int = Field(alias="time")
 
+
 class RawOpenInterest(BaseRaw):
     """미체결 약정 (REST: openInterest)"""
     symbol: str = Field(alias="symbol")
     open_interest: str = Field(alias="openInterest")
     timestamp: int = Field(alias="time")
 
+
 class RawLongShortRatio(BaseRaw):
-    """롱숏 비율 (REST: globalLongShortAccountRatio) - 배열[0] 사용"""
+    """롱숏 비율 (REST: globalLongShortAccountRatio)"""
     symbol: str = Field(alias="symbol")
     long_short_ratio: str = Field(alias="longShortRatio")
     long_account: str = Field(alias="longAccount")

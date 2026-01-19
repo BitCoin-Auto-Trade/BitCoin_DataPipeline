@@ -26,7 +26,7 @@ class BinanceRestWorker:
                 self._lsr_counter += 1
                 await asyncio.sleep(60)
 
-    async def _fetch(self, session: aiohttp.ClientSession, endpoint: str, extra_params: dict = None) -> dict | list | None:
+    async def _fetch(self, session: aiohttp.ClientSession, endpoint: str, extra_params: dict = None):
         url = f"{BINANCE_REST_URL}{endpoint}"
         params = {"symbol": SYMBOL.upper()}
         if extra_params:

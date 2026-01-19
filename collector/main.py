@@ -1,7 +1,7 @@
 import asyncio
 from shared.utils.logger import setup_logger
-from client.gcs import GCSClient
-from client.redis import RedisClient
+from shared.client.gcs import GCSClient
+from shared.client.redis import RedisClient
 from worker.binance_ws import BinanceWebsocketWorker
 from worker.binance_rest import BinanceRestWorker
 

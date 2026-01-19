@@ -20,31 +20,18 @@ services:
     networks:
       - bitcoin_network
 
-  # processor:
-  #   build: ./processor
-  #   container_name: bitcoin_processor
-  #   depends_on:
-  #     - redis
-  #   env_file:
-  #     - .env
-  #   volumes:
-  #     - ./keys/gcp-key.json:/app/gcp-key.json:ro
-  #     - ./shared:/app/shared:ro
-  #   networks:
-  #     - bitcoin_network
-
-  # loader:
-  #   build: ./loader
-  #   container_name: bitcoin_loader
-  #   depends_on:
-  #     - redis
-  #   env_file:
-  #     - .env
-  #   volumes:
-  #     - ./keys/gcp-key.json:/app/gcp-key.json:ro
-  #     - ./shared:/app/shared:ro
-  #   networks:
-  #     - bitcoin_network
+  processor:
+    build: ./processor
+    container_name: bitcoin_processor
+    depends_on:
+      - redis
+    env_file:
+      - .env
+    volumes:
+      - ./keys/gcp-key.json:/keys/gcp-key.json:ro
+      - ./shared:/app/shared:ro
+    networks:
+      - bitcoin_network
 
 networks:
   bitcoin_network:
