@@ -1,6 +1,4 @@
-from typing import Optional
-from extract.redis import RedisFetcher
-from shared.models.transform import (
+from shared.models.core import (
     ProcessedCVD,
     ProcessedBookImbalance,
     ProcessedSpreadAnalysis,
@@ -11,19 +9,16 @@ from shared.models.transform import (
 
 
 class RealtimeTransformer:
-    """실시간 데이터 변환 (Redis 소스)"""
-
-    def __init__(self, fetcher: RedisFetcher):
+    def __init__(self, fetcher):
         self.fetcher = fetcher
         self.symbol = fetcher.symbol
 
-    def _calc_orderbook_volumes(self, orderbook):
-        """오더북에서 bid/ask 볼륨 계산"""
-        bid_vols = [float(b[1]) for b in orderbook.bids]
-        ask_vols = [float(a[1]) for a in orderbook.asks]
+    def _calc_orderbook_volumes(self, ob):
+        bid_vols = [float(b[1]) for b in ob.bids]
+        ask_vols = [float(a[1]) for a in ob.asks]
         return sum(bid_vols), sum(ask_vols), bid_vols, ask_vols
 
-    def transform_cvd(self, market: str, prev_cvd: float = 0, interval: str = "1m"):
+    def transform_cvd(self, market, prev_cvd=0, interval="1m"):
         """AggTrade -> CVD (Cumulative Volume Delta)"""
         agg = self.fetcher.get_aggtrade(market)
         if not agg:
@@ -43,7 +38,7 @@ class RealtimeTransformer:
             delta=delta,
         )
 
-    def transform_book_imbalance(self, market: str):
+    def transform_book_imbalance(self, market):
         """OrderBook -> 매수/매도 불균형"""
         ob = self.fetcher.get_orderbook(market)
         if not ob:
@@ -71,7 +66,7 @@ class RealtimeTransformer:
             signal=signal,
         )
 
-    def transform_spread_analysis(self, market: str):
+    def transform_spread_analysis(self, market):
         """OrderBook -> 스프레드 분석"""
         ob = self.fetcher.get_orderbook(market)
         if not ob:
@@ -99,7 +94,7 @@ class RealtimeTransformer:
             liquidity_status=status,
         )
 
-    def transform_wall_detection(self, market: str, threshold: float = 2.0):
+    def transform_wall_detection(self, market, threshold=2.0):
         """OrderBook -> 매물벽 탐지"""
         ob = self.fetcher.get_orderbook(market)
         if not ob:
@@ -127,7 +122,7 @@ class RealtimeTransformer:
             strongest_resistance=min((w["price"] for w in ask_walls), default=None),
         )
 
-    def transform_liq_spike(self, market: str, avg_liq_1h: float = 0):
+    def transform_liq_spike(self, market, avg_liq_1h=0):
         """Liquidation -> 청산 스파이크"""
         liq = self.fetcher.get_liquidation(market)
         if not liq:
@@ -138,10 +133,7 @@ class RealtimeTransformer:
         is_spike = ratio > 3.0
         is_long = liq.side == "SELL"
 
-        if is_spike:
-            signal = "LONG_SQUEEZE" if is_long else "SHORT_SQUEEZE"
-        else:
-            signal = "NEUTRAL"
+        signal = ("LONG_SQUEEZE" if is_long else "SHORT_SQUEEZE") if is_spike else "NEUTRAL"
 
         return ProcessedLiqSpike(
             symbol=self.symbol,
@@ -155,7 +147,7 @@ class RealtimeTransformer:
             signal=signal,
         )
 
-    def transform_price_vol_spike(self, market: str, avg_volume: float = 0):
+    def transform_price_vol_spike(self, market, avg_volume=0):
         """Kline -> 가격/거래량 스파이크"""
         kline = self.fetcher.get_kline(market)
         if not kline:
