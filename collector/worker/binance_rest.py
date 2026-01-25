@@ -1,8 +1,10 @@
 import asyncio
 import time
+from datetime import datetime
 import aiohttp
+import pandas as pd
 from shared.utils.logger import get_logger
-from shared.utils.constants import SYMBOL, BINANCE_REST_URL, BINANCE_REST_ENDPOINTS
+from shared.utils.constants import SYMBOL, KST, BINANCE_REST_URL, BINANCE_REST_ENDPOINTS
 from shared.models.raw import RawOpenInterest, RawFundingRate, RawLongShortRatio
 
 
@@ -41,9 +43,18 @@ class BinanceRestWorker:
         return None
 
     def _save_to_gcs(self, data_type: str, data: dict):
-        ts = int(time.time() * 1000)
-        blob_name = f"raw/futures/{data_type}/{SYMBOL}/{ts}.json"
-        self.gcs.upload_json(blob_name, data)
+        now = datetime.now(KST)
+        data["_ingested_at"] = now.isoformat()
+        df = pd.DataFrame([data])
+
+        blob_name = (
+            f"raw/futures/{data_type}/"
+            f"year={now.strftime('%Y')}/"
+            f"month={now.strftime('%m')}/"
+            f"day={now.strftime('%d')}/"
+            f"{int(time.time())}_{SYMBOL}.parquet"
+        )
+        self.gcs.upload_parquet(blob_name, df)
 
     async def _fetch_open_interest(self, session: aiohttp.ClientSession):
         data = await self._fetch(session, BINANCE_REST_ENDPOINTS["open_interest"])

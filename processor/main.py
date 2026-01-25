@@ -2,6 +2,7 @@ import asyncio
 from shared.utils.logger import setup_logger, get_logger
 from shared.client.redis import RedisClient
 from shared.client.gcs import GCSClient
+from shared.worker.redis_to_gcs import RedisToGCSWorker
 from extract.redis import RedisFetcher
 from extract.gcs import GCSFetcher
 from transform.realtime import RealtimeTransformer
@@ -9,6 +10,7 @@ from transform.batch import BatchTransformer
 from load.redis import RedisLoader
 from load.gcs import GCSLoader
 from utils import calc_change_percent
+from shared.utils.constants import CORE_DATA_TYPES
 
 
 class Processor:
@@ -18,21 +20,25 @@ class Processor:
         self.symbol = symbol
         self.logger = get_logger("Processor")
 
-        # 클라이언트
         self.redis = RedisClient()
         self.gcs = GCSClient()
 
-        # ETL 컴포넌트
         self.realtime = RealtimeTransformer(RedisFetcher(self.redis, symbol))
         self.batch = BatchTransformer(GCSFetcher(self.gcs, symbol))
         self.redis_loader = RedisLoader(self.redis, symbol)
         self.gcs_loader = GCSLoader(self.gcs, symbol)
 
-        # 상태
+        self.core_gcs_worker = RedisToGCSWorker(
+            name="CoreToGCS",
+            redis=self.redis,
+            gcs=self.gcs,
+            data_types=CORE_DATA_TYPES,
+            redis_key_prefix="queue:core",
+            gcs_path_prefix="core",
+        )
+
         self.prev_cvd = 0.0
         self.prev_oi = 0.0
-
-    # ==================== 실시간 핸들러 ====================
 
     def _handle_aggtrade(self, market):
         result = self.realtime.transform_cvd(market, self.prev_cvd)
@@ -81,7 +87,6 @@ class Processor:
             handler(market)
 
     async def run_realtime(self):
-        """실시간 데이터 처리 (Redis Pub/Sub)"""
         pubsub = self.redis.psubscribe("data:*")
         self.logger.info("Subscribed to data:* channels")
 
@@ -92,28 +97,23 @@ class Processor:
             await asyncio.sleep(0.01)
 
     async def run_batch(self):
-        """배치 데이터 처리 (GCS 주기적 폴링)"""
         fetcher = RedisFetcher(self.redis, self.symbol)
 
         while True:
-            # 가격 변화율 계산
             kline = fetcher.get_kline("futures")
             price_chg = 0.0
             if kline:
                 price_chg = calc_change_percent(float(kline.close_price), float(kline.open_price))
 
-            # OI Trend
             if oi := self.batch.transform_oi_trend(self.prev_oi, price_chg):
                 self.prev_oi = oi.open_interest
                 self.gcs_loader.save("oi_trend", oi)
                 self.logger.info(f"[OI] {oi.trend_signal} oi={oi.open_interest:.0f}")
 
-            # FR Heatmap
             if fr := self.batch.transform_fr_heatmap():
                 self.gcs_loader.save("fr_heatmap", fr)
                 self.logger.info(f"[FR] {fr.heat_level} rate={fr.funding_rate:.6f}")
 
-            # LS Divergence
             if ls := self.batch.transform_ls_divergence(price_chg):
                 self.gcs_loader.save("ls_divergence", ls)
                 self.logger.info(f"[LS] {ls.signal} ratio={ls.ls_ratio:.4f}")
@@ -122,7 +122,11 @@ class Processor:
 
     async def run(self):
         self.logger.info("Processor started")
-        await asyncio.gather(self.run_realtime(), self.run_batch())
+        await asyncio.gather(
+            self.run_realtime(),
+            self.run_batch(),
+            self.core_gcs_worker.run(),
+        )
 
 
 async def main():

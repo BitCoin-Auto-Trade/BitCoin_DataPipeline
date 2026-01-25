@@ -8,12 +8,11 @@ from shared.models.raw import RawKline, RawAggTrade, RawOrderBook, RawSpotOrderB
 
 
 class BinanceWebsocketWorker:
-    """Binance WebSocket Worker"""
+    """Binance WebSocket 실시간 데이터 수집"""
 
-    def __init__(self, market: Literal["spot", "futures"], redis, gcs):
+    def __init__(self, market: Literal["spot", "futures"], redis):
         self.market = market
         self.redis = redis
-        self.gcs = gcs
         self.logger = get_logger(market.capitalize())
 
     def _get_streams(self):
@@ -37,7 +36,6 @@ class BinanceWebsocketWorker:
                     self.logger.info("Connected!")
                     async for msg in ws:
                         self._handle_message(msg)
-
             except websockets.exceptions.ConnectionClosed:
                 self.logger.warning("Connection closed. Reconnecting in 3s...")
                 await asyncio.sleep(3)
@@ -47,25 +45,33 @@ class BinanceWebsocketWorker:
         payload = data["data"] if "stream" in data else data
         event_type = payload.get("e")
 
-        if event_type == "kline":
-            self._process_kline(payload)
-        elif event_type == "aggTrade":
-            self._process_aggtrade(payload)
-        elif event_type == "depthUpdate":
-            self._process_orderbook(payload)
+        handlers = {
+            "kline": self._process_kline,
+            "aggTrade": self._process_aggtrade,
+            "depthUpdate": self._process_orderbook,
+            "forceOrder": self._process_liquidation,
+        }
+
+        if handler := handlers.get(event_type):
+            handler(payload)
         elif "lastUpdateId" in payload:
             self._process_spot_orderbook(payload)
-        elif event_type == "forceOrder":
-            self._process_liquidation(payload)
 
     def _publish(self, data_type: str, symbol: str = SYMBOL):
-        """데이터 변경 이벤트 발행"""
         self.redis.publish(f"data:{self.market}:{data_type}", symbol)
 
+    def _push_queue(self, data_type: str, data: dict):
+        key = f"queue:{self.market}:{data_type}"
+        self.redis.rpush(key, json.dumps(data, ensure_ascii=False))
+
+    def _save_and_queue(self, data_type: str, raw):
+        data = raw.to_dict()
+        self.redis.set_hash(f"raw:{self.market}:{data_type}:{SYMBOL}", data, ex=30)
+        self._push_queue(data_type, data)
+
     def _process_kline(self, data: dict):
-        k = data["k"]
-        raw = RawKline(**k)
-        self.redis.set_hash(f"raw:{self.market}:kline:{SYMBOL}", raw.to_dict(), ex=30)
+        raw = RawKline(**data["k"])
+        self._save_and_queue("kline", raw)
         self._publish("kline")
         if raw.is_closed:
             self._publish("kline_closed")
@@ -73,27 +79,26 @@ class BinanceWebsocketWorker:
 
     def _process_aggtrade(self, data: dict):
         raw = RawAggTrade(**data)
-        self.redis.set_hash(f"raw:{self.market}:aggtrade:{SYMBOL}", raw.to_dict(), ex=30)
+        self._save_and_queue("aggtrade", raw)
         self._publish("aggtrade")
         self.logger.debug(f"[TRADE] {'SELL' if raw.is_buyer_maker else 'BUY'} {raw.quantity} @ {raw.price}")
 
     def _process_orderbook(self, data: dict):
         raw = RawOrderBook(**data)
-        self.redis.set_hash(f"raw:{self.market}:orderbook:{SYMBOL}", raw.to_dict(), ex=30)
+        self._save_and_queue("orderbook", raw)
         self._publish("orderbook")
         self.logger.debug(f"[BOOK] Bid: {raw.bids[0][0]} | Ask: {raw.asks[0][0]}")
 
     def _process_spot_orderbook(self, data: dict):
         raw = RawSpotOrderBook(**data)
-        self.redis.set_hash(f"raw:{self.market}:orderbook:{SYMBOL}", raw.to_dict(), ex=30)
+        self._save_and_queue("orderbook", raw)
         self._publish("orderbook")
         self.logger.debug(f"[BOOK] Bid: {raw.bids[0][0]} | Ask: {raw.asks[0][0]}")
 
     def _process_liquidation(self, data: dict):
-        o = data["o"]
-        raw = RawLiquidation(**o)
+        raw = RawLiquidation(**data["o"])
         if raw.symbol.lower() != SYMBOL:
             return
-        self.redis.set_hash(f"raw:{self.market}:liquidation:{SYMBOL}", raw.to_dict(), ex=30)
+        self._save_and_queue("liquidation", raw)
         self._publish("liquidation")
         self.logger.debug(f"[LIQ] {raw.side} {raw.quantity} @ {raw.price}")

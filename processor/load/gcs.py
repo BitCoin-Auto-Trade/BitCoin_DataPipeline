@@ -1,4 +1,7 @@
-from utils import now_ms
+import time
+from datetime import datetime
+import pandas as pd
+from shared.utils.constants import KST
 
 
 class GCSLoader:
@@ -7,6 +10,16 @@ class GCSLoader:
         self.symbol = symbol
 
     def save(self, data_type, data):
-        """core 테이블에 저장"""
-        blob_name = f"core/{data_type}/{self.symbol}/{now_ms()}.json"
-        self.gcs.upload_json(blob_name, data.model_dump())
+        now = datetime.now(KST)
+        record = data.model_dump()
+        record["_ingested_at"] = now.isoformat()
+        df = pd.DataFrame([record])
+
+        blob_name = (
+            f"core/{data_type}/"
+            f"year={now.strftime('%Y')}/"
+            f"month={now.strftime('%m')}/"
+            f"day={now.strftime('%d')}/"
+            f"{int(time.time())}_{self.symbol}.parquet"
+        )
+        self.gcs.upload_parquet(blob_name, df)

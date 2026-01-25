@@ -1,3 +1,5 @@
+from datetime import datetime
+from shared.utils.constants import KST
 from shared.models.raw import RawFundingRate, RawOpenInterest, RawLongShortRatio
 
 
@@ -7,9 +9,17 @@ class GCSFetcher:
         self.symbol = symbol
 
     def _get(self, data_type):
-        prefix = f"raw/futures/{data_type}/{self.symbol}/"
-        data = self.gcs.get_latest_json(prefix)
-        return data
+        now = datetime.now(KST)
+        prefix = (
+            f"raw/futures/{data_type}/"
+            f"year={now.strftime('%Y')}/"
+            f"month={now.strftime('%m')}/"
+            f"day={now.strftime('%d')}/"
+        )
+        df = self.gcs.get_latest_parquet(prefix)
+        if df is None or df.empty:
+            return None
+        return df.iloc[0].to_dict()
 
     def get_open_interest(self):
         data = self._get("oi")
