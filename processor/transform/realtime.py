@@ -7,19 +7,22 @@ from shared.models.core import (
     ProcessedPriceVolSpike,
 )
 
-
 class RealtimeTransformer:
     def __init__(self, fetcher):
         self.fetcher = fetcher
         self.symbol = fetcher.symbol
 
     def _calc_orderbook_volumes(self, ob):
+        """호가창 잔량 합계 및 리스트 추출"""
         bid_vols = [float(b[1]) for b in ob.bids]
         ask_vols = [float(a[1]) for a in ob.asks]
         return sum(bid_vols), sum(ask_vols), bid_vols, ask_vols
 
-    def transform_cvd(self, market, prev_cvd=0, interval="1m"):
-        """AggTrade -> CVD (Cumulative Volume Delta)"""
+    def transform_cvd(self, market, prev_cvd=0, price_change_pct=0, interval="1m"):
+        """
+        AggTrade -> CVD (Cumulative Volume Delta) 분석
+        로직: 가격 방향과 CVD 방향이 다를 경우 '다이버전스'로 판단 (추세 반전 예고)
+        """
         agg = self.fetcher.get_aggtrade(market)
         if not agg:
             return None
@@ -27,19 +30,33 @@ class RealtimeTransformer:
         qty = float(agg.quantity)
         is_sell = agg.is_buyer_maker
         delta = -qty if is_sell else qty
+        curr_cvd = prev_cvd + delta
+
+        # 시그널 판단 로직 (CVD 다이버전스)
+        signal = "NEUTRAL"
+        if price_change_pct > 0.05 and delta < 0:
+            signal = "BEARISH_DIVERGENCE"  # 가격은 오르는데 매도세가 강함 (가짜 상승)
+        elif price_change_pct < -0.05 and delta > 0:
+            signal = "BULLISH_DIVERGENCE"  # 가격은 내리는데 매수세가 강함 (바닥 다지기)
+        elif abs(price_change_pct) > 0.1 and (price_change_pct * delta > 0):
+            signal = "TREND_CONFIRMED"     # 가격과 매수/매도 방향이 일치 (강한 추세)
 
         return ProcessedCVD(
             symbol=self.symbol,
             timestamp=agg.timestamp,
             interval=interval,
-            cvd=prev_cvd + delta,
+            cvd=curr_cvd,
             buy_volume=0 if is_sell else qty,
             sell_volume=qty if is_sell else 0,
             delta=delta,
+            signal=signal # 모델 필드에 signal이 있다고 가정하거나 추가 필요
         )
 
     def transform_book_imbalance(self, market):
-        """OrderBook -> 매수/매도 불균형"""
+        """
+        OrderBook -> 매수/매도 불균형 분석
+        로직: 단순 비율이 아닌 20% 이상의 유의미한 쏠림 현상 포착
+        """
         ob = self.fetcher.get_orderbook(market)
         if not ob:
             return None
@@ -50,9 +67,15 @@ class RealtimeTransformer:
             return None
 
         ratio = (bid_total - ask_total) / total
-        if ratio > 0.2:
+        
+        # 불균형 강도에 따른 시グ널 세분화
+        if ratio > 0.4:
+            signal = "STRONG_BUY_IMMINE"  # 매수벽이 압도적 (지지선 형성)
+        elif ratio > 0.15:
             signal = "BUY_PRESSURE"
-        elif ratio < -0.2:
+        elif ratio < -0.4:
+            signal = "STRONG_SELL_IMMINE" # 매도벽이 압도적 (저항선 형성)
+        elif ratio < -0.15:
             signal = "SELL_PRESSURE"
         else:
             signal = "NEUTRAL"
@@ -67,7 +90,10 @@ class RealtimeTransformer:
         )
 
     def transform_spread_analysis(self, market):
-        """OrderBook -> 스프레드 분석"""
+        """
+        OrderBook -> 스프레드 및 유동성 분석
+        로직: 스프레드가 벌어지면 변동성 폭발(Slippage 발생) 전조로 해석
+        """
         ob = self.fetcher.get_orderbook(market)
         if not ob:
             return None
@@ -77,12 +103,13 @@ class RealtimeTransformer:
         spread = best_ask - best_bid
         spread_pct = (spread / best_bid) * 100
 
-        if spread_pct < 0.01:
-            status = "NORMAL"
-        elif spread_pct < 0.05:
-            status = "LOW"
+        # 비트코인 선물 기준 스프레드 상태 (0.01% 내외가 정상)
+        if spread_pct <= 0.015:
+            status = "HEALTHY"
+        elif spread_pct <= 0.04:
+            status = "THIN_LIQUIDITY" # 유동성 부족 (작은 물량에도 큰 변동 위험)
         else:
-            status = "CRITICAL"
+            status = "HIGH_VOLATILITY_ALERT" # 급변동 중 (매매 주의)
 
         return ProcessedSpreadAnalysis(
             symbol=self.symbol,
@@ -94,23 +121,31 @@ class RealtimeTransformer:
             liquidity_status=status,
         )
 
-    def transform_wall_detection(self, market, threshold=2.0):
-        """OrderBook -> 매물벽 탐지"""
+    def transform_wall_detection(self, market, threshold=3.0):
+        """
+        OrderBook -> 매물벽 탐지
+        로직: 전체 평균 대비 n배 이상 크고, 현재가와 1% 이내로 가까운 벽만 '의미 있는 벽'으로 판단
+        """
         ob = self.fetcher.get_orderbook(market)
         if not ob:
             return None
 
+        best_price = float(ob.bids[0][0])
         bid_total, ask_total, bid_vols, ask_vols = self._calc_orderbook_volumes(ob)
-        avg_bid = bid_total / len(bid_vols) if bid_vols else 0
-        avg_ask = ask_total / len(ask_vols) if ask_vols else 0
+        avg_vol = (bid_total + ask_total) / (len(bid_vols) + len(ask_vols))
+
+        # 현재가 기준 상하방 1% 이내의 벽만 필터링 (가까운 벽이 실질적 저항/지지)
+        def is_significant(price, vol):
+            dist = abs(price - best_price) / best_price
+            return vol > avg_vol * threshold and dist < 0.01
 
         bid_walls = [
-            {"price": float(ob.bids[i][0]), "volume": v}
-            for i, v in enumerate(bid_vols) if v > avg_bid * threshold
+            {"price": float(ob.bids[i][0]), "volume": v, "strength": round(v/avg_vol, 1)}
+            for i, v in enumerate(bid_vols) if is_significant(float(ob.bids[i][0]), v)
         ]
         ask_walls = [
-            {"price": float(ob.asks[i][0]), "volume": v}
-            for i, v in enumerate(ask_vols) if v > avg_ask * threshold
+            {"price": float(ob.asks[i][0]), "volume": v, "strength": round(v/avg_vol, 1)}
+            for i, v in enumerate(ask_vols) if is_significant(float(ob.asks[i][0]), v)
         ]
 
         return ProcessedWallDetection(
@@ -122,18 +157,25 @@ class RealtimeTransformer:
             strongest_resistance=min((w["price"] for w in ask_walls), default=None),
         )
 
-    def transform_liq_spike(self, market, avg_liq_1h=0):
-        """Liquidation -> 청산 스파이크"""
+    def transform_liq_spike(self, market, avg_liq_1h=10000):
+        """
+        Liquidation -> 청산 스파이크 분석
+        로직: 대량 청산은 추세의 끝(Extremum)일 확률이 높음. '반대 방향' 시그널 생성.
+        """
         liq = self.fetcher.get_liquidation(market)
         if not liq:
             return None
 
         value = float(liq.quantity) * float(liq.price)
         ratio = value / avg_liq_1h if avg_liq_1h > 0 else 0
-        is_spike = ratio > 3.0
-        is_long = liq.side == "SELL"
+        is_spike = ratio > 5.0  # 5배 이상 터졌을 때 유의미한 스파이크
+        is_long_liq = liq.side == "SELL" # 롱 포지션이 강제 매도됨
 
-        signal = ("LONG_SQUEEZE" if is_long else "SHORT_SQUEEZE") if is_spike else "NEUTRAL"
+        # 시그널: 롱 대량 청산 시 '바닥권 매수 기회', 숏 대량 청산 시 '고점 매도 기회'
+        if is_spike:
+            signal = "POTENTIAL_BOTTOM" if is_long_liq else "POTENTIAL_TOP"
+        else:
+            signal = "NEUTRAL"
 
         return ProcessedLiqSpike(
             symbol=self.symbol,
@@ -141,14 +183,17 @@ class RealtimeTransformer:
             current_liq_value=value,
             avg_liq_value_1h=avg_liq_1h,
             spike_ratio=ratio,
-            long_liq_value=value if is_long else 0,
-            short_liq_value=0 if is_long else value,
+            long_liq_value=value if is_long_liq else 0,
+            short_liq_value=0 if is_long_liq else value,
             is_spike=is_spike,
             signal=signal,
         )
 
-    def transform_price_vol_spike(self, market, avg_volume=0):
-        """Kline -> 가격/거래량 스파이크"""
+    def transform_price_vol_spike(self, market, avg_volume=0, vol_std_dev=0):
+        """
+        Kline -> 가격/거래량 스파이크 (Vol-Price Action)
+        로직: 거래량이 실린 가격 변화는 '돌파(Breakout)' 혹은 '절정(Climax)'으로 판단
+        """
         kline = self.fetcher.get_kline(market)
         if not kline:
             return None
@@ -159,13 +204,17 @@ class RealtimeTransformer:
 
         price_chg = ((close_p - open_p) / open_p) * 100
         vol_ratio = vol / avg_volume if avg_volume > 0 else 0
-        is_price_spike = abs(price_chg) > 0.5
-        is_vol_spike = vol_ratio > 2.0
+        
+        # 거래량 2.5배 이상 & 가격 0.5% 이상 변화 시 스파이크
+        is_vol_spike = vol_ratio > 2.5
+        is_price_spike = abs(price_chg) > 0.4
 
-        if is_price_spike and price_chg > 0:
-            signal = "IMPULSE_UP"
-        elif is_price_spike and price_chg < 0:
-            signal = "IMPULSE_DOWN"
+        if is_vol_spike and is_price_spike:
+            signal = "VOL_DRIVEN_BREAKOUT" if price_chg > 0 else "VOL_DRIVEN_DUMP"
+        elif not is_vol_spike and is_price_spike:
+            signal = "LOW_VOL_FAKE_MOVE"    # 거래량 없는 가격 움직임 (트랩 가능성)
+        elif is_vol_spike and not is_price_spike:
+            signal = "ABSORPTION"           # 거래량은 터지는데 가격이 안 움직임 (물량 소화 중)
         else:
             signal = "NORMAL"
 
