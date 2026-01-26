@@ -6,7 +6,7 @@ variable "project_id" {
 variable "region" {
   description = "리전 (AWS의 region과 동일)"
   type        = string
-  default     = "asia-northeast3"  # 서울 (AWS는 ap-northeast-2)
+  default     = "asia-northeast3" # 서울 (AWS는 ap-northeast-2)
 }
 
 variable "zone" {

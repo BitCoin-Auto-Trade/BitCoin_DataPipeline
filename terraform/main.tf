@@ -77,5 +77,5 @@ resource "google_compute_firewall" "allow_iap_ssh" {
   # 구글 IAP 서비스의 고정 IP 대역입니다.
   source_ranges = ["35.235.240.0/20"]
   target_tags   = ["bitcoin-pipeline"]
-  priority      = 150  # deny_ssh(200)보다 우선순위가 높아야 합니다.
+  priority      = 150 # deny_ssh(200)보다 우선순위가 높아야 합니다.
 }
