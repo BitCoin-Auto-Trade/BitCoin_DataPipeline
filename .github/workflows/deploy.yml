@@ -85,9 +85,9 @@ jobs:
               fi
               cd ~/BitCoin_DataPipeline && \
               git pull origin main && \
-              docker-compose pull && \
-              docker-compose down && \
-              docker-compose up -d
+              docker compose pull && \
+              docker compose down && \
+              docker compose up -d
             "
 
       - name: Verify deployment
@@ -97,4 +97,4 @@ jobs:
             --zone=${{ secrets.GCP_ZONE }} \
             --project=${{ secrets.GCP_PROJECT_ID }} \
             --tunnel-through-iap \
-            --command="cd ~/BitCoin_DataPipeline && docker-compose ps"
+            --command="cd ~/BitCoin_DataPipeline && docker compose ps"
