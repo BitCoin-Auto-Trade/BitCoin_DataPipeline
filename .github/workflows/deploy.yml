@@ -82,14 +82,15 @@ jobs:
             --project=${{ secrets.GCP_PROJECT_ID }} \
             --tunnel-through-iap \
             --command="
-              if [ ! -d '~/BitCoin_DataPipeline' ]; then
-                git clone https://github.com/${{ github.repository }}.git ~/BitCoin_DataPipeline
-              fi
               cd ~/BitCoin_DataPipeline && \
               git pull origin main && \
               
-              # Secret에 저장된 전체 내용을 .env 파일로 저장
+              # .env 파일 생성
               echo \"${{ secrets.ENV_FILE }}\" > .env && \
+              
+              # GCP 키 파일 생성
+              rm -rf keys/gcp-key.json && \
+              echo '${{ secrets.GCP_SA_KEY }}' > keys/gcp-key.json && \
               
               sudo gcloud auth configure-docker ${{ env.AR_HOSTNAME }} --quiet && \
               sudo docker compose pull && \
