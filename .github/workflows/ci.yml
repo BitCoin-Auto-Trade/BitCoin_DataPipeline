@@ -20,16 +20,10 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install flake8
+          pip install ruff
 
-      - name: Run flake8 on collector
-        run: flake8 collector --max-line-length=120 --ignore=E501,W503
-
-      - name: Run flake8 on processor
-        run: flake8 processor --max-line-length=120 --ignore=E501,W503
-
-      - name: Run flake8 on shared
-        run: flake8 shared --max-line-length=120 --ignore=E501,W503
+      - name: Run Ruff linter
+        run: ruff check collector processor shared --line-length=120
 
   docker-build:
     name: Docker Build Test

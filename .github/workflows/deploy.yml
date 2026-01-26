@@ -57,7 +57,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-deploy:
+  deploy:
     name: Deploy to GCE
     needs: build-and-push
     runs-on: ubuntu-latest
