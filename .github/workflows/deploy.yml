@@ -88,9 +88,14 @@ jobs:
               # .env 파일 생성
               echo \"${{ secrets.ENV_FILE }}\" > .env && \
               
-              # GCP 키 파일 생성 (Base64 디코딩 방식)
-              mkdir -p keys && \
-              rm -rf keys/gcp-key.json && \
+              # keys 디렉토리 생성 및 권한 조정
+              sudo mkdir -p keys && \
+              sudo chown -R \$USER:\$USER keys && \
+              
+              # 기존에 root로 생성된 파일/폴더가 있다면 삭제
+              sudo rm -rf keys/gcp-key.json && \
+              
+              # GCP 키 파일 생성
               echo '${{ secrets.GCP_SA_KEY }}' | base64 -d > keys/gcp-key.json && \
               chmod 600 keys/gcp-key.json && \
               
@@ -99,6 +104,7 @@ jobs:
               sudo docker compose down && \
               sudo docker compose up -d
             "
+
       - name: Verify deployment
         run: |
           sleep 10
