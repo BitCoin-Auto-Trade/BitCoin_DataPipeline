@@ -15,11 +15,25 @@ provider "google" {
   credentials = file(var.credentials_file)
 }
 
+# GCE용 서비스 계정
+resource "google_service_account" "gce_sa" {
+  account_id   = "bitcoin-pipeline-gce"
+  display_name = "Bitcoin Pipeline GCE Service Account"
+}
+
+# Artifact Registry 읽기 권한
+resource "google_project_iam_member" "gce_ar_reader" {
+  project = var.project_id
+  role    = "roles/artifactregistry.reader"
+  member  = "serviceAccount:${google_service_account.gce_sa.email}"
+}
+
 resource "google_compute_instance" "bitcoin_pipeline" {
-  name         = "bitcoin-pipeline"
-  machine_type = "e2-medium"
-  zone         = var.zone
-  tags         = ["bitcoin-pipeline"]
+  name                      = "bitcoin-pipeline"
+  machine_type              = "e2-medium"
+  zone                      = var.zone
+  tags                      = ["bitcoin-pipeline"]
+  allow_stopping_for_update = true
 
   boot_disk {
     initialize_params {
@@ -31,6 +45,11 @@ resource "google_compute_instance" "bitcoin_pipeline" {
   network_interface {
     network = "default"
     access_config {}
+  }
+
+  service_account {
+    email  = google_service_account.gce_sa.email
+    scopes = ["cloud-platform"]
   }
 }
 
