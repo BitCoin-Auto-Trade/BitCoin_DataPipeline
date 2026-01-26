@@ -45,31 +45,37 @@ class Processor:
         if result:
             self.prev_cvd = result.cvd
             self.redis_loader.save("cvd", result)
-            self.logger.debug(f"[CVD] {result.cvd:.4f} delta={result.delta:.4f}")
+            self.logger.debug(
+                f"[CVD] {result.cvd:.4f} delta={result.delta:.4f}")
 
     def _handle_orderbook(self, market):
         if imbalance := self.realtime.transform_book_imbalance(market):
             self.redis_loader.save("book_imbalance", imbalance)
-            self.logger.debug(f"[IMBALANCE] {imbalance.signal} ratio={imbalance.imbalance_ratio:.4f}")
+            self.logger.debug(
+                f"[IMBALANCE] {imbalance.signal} ratio={imbalance.imbalance_ratio:.4f}")
 
         if spread := self.realtime.transform_spread_analysis(market):
             self.redis_loader.save("spread_analysis", spread)
-            self.logger.debug(f"[SPREAD] {spread.liquidity_status} {spread.spread_percent:.6f}%")
+            self.logger.debug(
+                f"[SPREAD] {spread.liquidity_status} {spread.spread_percent:.6f}%")
 
         if wall := self.realtime.transform_wall_detection(market):
             self.redis_loader.save("wall_detection", wall)
             if wall.bid_walls or wall.ask_walls:
-                self.logger.debug(f"[WALL] support={wall.strongest_support} resistance={wall.strongest_resistance}")
+                self.logger.debug(
+                    f"[WALL] support={wall.strongest_support} resistance={wall.strongest_resistance}")
 
     def _handle_kline_closed(self, market):
         if result := self.realtime.transform_price_vol_spike(market):
             self.redis_loader.save("price_vol_spike", result)
-            self.logger.info(f"[SPIKE] {result.signal} price={result.price_change_percent:.2f}%")
+            self.logger.info(
+                f"[SPIKE] {result.signal} price={result.price_change_percent:.2f}%")
 
     def _handle_liquidation(self, market):
         if result := self.realtime.transform_liq_spike(market):
             self.redis_loader.save("liq_spike", result)
-            self.logger.info(f"[LIQ] {result.signal} value={result.current_liq_value:.2f}")
+            self.logger.info(
+                f"[LIQ] {result.signal} value={result.current_liq_value:.2f}")
 
     def _process_message(self, channel):
         parts = channel.split(":")
@@ -103,16 +109,19 @@ class Processor:
             kline = fetcher.get_kline("futures")
             price_chg = 0.0
             if kline:
-                price_chg = calc_change_percent(float(kline.close_price), float(kline.open_price))
+                price_chg = calc_change_percent(
+                    float(kline.close_price), float(kline.open_price))
 
             if oi := self.batch.transform_oi_trend(self.prev_oi, price_chg):
                 self.prev_oi = oi.open_interest
                 self.gcs_loader.save("oi_trend", oi)
-                self.logger.info(f"[OI] {oi.trend_signal} oi={oi.open_interest:.0f}")
+                self.logger.info(
+                    f"[OI] {oi.trend_signal} oi={oi.open_interest:.0f}")
 
             if fr := self.batch.transform_fr_heatmap():
                 self.gcs_loader.save("fr_heatmap", fr)
-                self.logger.info(f"[FR] {fr.heat_level} rate={fr.funding_rate:.6f}")
+                self.logger.info(
+                    f"[FR] {fr.heat_level} rate={fr.funding_rate:.6f}")
 
             if ls := self.batch.transform_ls_divergence(price_chg):
                 self.gcs_loader.save("ls_divergence", ls)

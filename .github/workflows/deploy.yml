@@ -57,7 +57,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  deploy:
+deploy:
     name: Deploy to GCE
     needs: build-and-push
     runs-on: ubuntu-latest
@@ -78,7 +78,11 @@ jobs:
           gcloud compute ssh ${{ secrets.GCE_INSTANCE_NAME }} \
             --zone=${{ secrets.GCP_ZONE }} \
             --project=${{ secrets.GCP_PROJECT_ID }} \
+            --tunnel-through-iap \
             --command="
+              if [ ! -d '~/BitCoin_DataPipeline' ]; then
+                git clone https://github.com/${{ github.repository }}.git ~/BitCoin_DataPipeline
+              fi
               cd ~/BitCoin_DataPipeline && \
               git pull origin main && \
               docker-compose pull && \
@@ -92,4 +96,5 @@ jobs:
           gcloud compute ssh ${{ secrets.GCE_INSTANCE_NAME }} \
             --zone=${{ secrets.GCP_ZONE }} \
             --project=${{ secrets.GCP_PROJECT_ID }} \
-            --command="docker-compose ps"
+            --tunnel-through-iap \
+            --command="cd ~/BitCoin_DataPipeline && docker-compose ps"

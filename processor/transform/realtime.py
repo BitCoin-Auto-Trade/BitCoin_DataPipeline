@@ -7,6 +7,7 @@ from shared.models.core import (
     ProcessedPriceVolSpike,
 )
 
+
 class RealtimeTransformer:
     def __init__(self, fetcher):
         self.fetcher = fetcher
@@ -49,7 +50,7 @@ class RealtimeTransformer:
             buy_volume=0 if is_sell else qty,
             sell_volume=qty if is_sell else 0,
             delta=delta,
-            signal=signal # 모델 필드에 signal이 있다고 가정하거나 추가 필요
+            signal=signal  # 모델 필드에 signal이 있다고 가정하거나 추가 필요
         )
 
     def transform_book_imbalance(self, market):
@@ -67,14 +68,14 @@ class RealtimeTransformer:
             return None
 
         ratio = (bid_total - ask_total) / total
-        
+
         # 불균형 강도에 따른 시グ널 세분화
         if ratio > 0.4:
             signal = "STRONG_BUY_IMMINE"  # 매수벽이 압도적 (지지선 형성)
         elif ratio > 0.15:
             signal = "BUY_PRESSURE"
         elif ratio < -0.4:
-            signal = "STRONG_SELL_IMMINE" # 매도벽이 압도적 (저항선 형성)
+            signal = "STRONG_SELL_IMMINE"  # 매도벽이 압도적 (저항선 형성)
         elif ratio < -0.15:
             signal = "SELL_PRESSURE"
         else:
@@ -107,9 +108,9 @@ class RealtimeTransformer:
         if spread_pct <= 0.015:
             status = "HEALTHY"
         elif spread_pct <= 0.04:
-            status = "THIN_LIQUIDITY" # 유동성 부족 (작은 물량에도 큰 변동 위험)
+            status = "THIN_LIQUIDITY"  # 유동성 부족 (작은 물량에도 큰 변동 위험)
         else:
-            status = "HIGH_VOLATILITY_ALERT" # 급변동 중 (매매 주의)
+            status = "HIGH_VOLATILITY_ALERT"  # 급변동 중 (매매 주의)
 
         return ProcessedSpreadAnalysis(
             symbol=self.symbol,
@@ -131,7 +132,8 @@ class RealtimeTransformer:
             return None
 
         best_price = float(ob.bids[0][0])
-        bid_total, ask_total, bid_vols, ask_vols = self._calc_orderbook_volumes(ob)
+        bid_total, ask_total, bid_vols, ask_vols = self._calc_orderbook_volumes(
+            ob)
         avg_vol = (bid_total + ask_total) / (len(bid_vols) + len(ask_vols))
 
         # 현재가 기준 상하방 1% 이내의 벽만 필터링 (가까운 벽이 실질적 저항/지지)
@@ -140,11 +142,13 @@ class RealtimeTransformer:
             return vol > avg_vol * threshold and dist < 0.01
 
         bid_walls = [
-            {"price": float(ob.bids[i][0]), "volume": v, "strength": round(v/avg_vol, 1)}
+            {"price": float(ob.bids[i][0]), "volume": v,
+             "strength": round(v/avg_vol, 1)}
             for i, v in enumerate(bid_vols) if is_significant(float(ob.bids[i][0]), v)
         ]
         ask_walls = [
-            {"price": float(ob.asks[i][0]), "volume": v, "strength": round(v/avg_vol, 1)}
+            {"price": float(ob.asks[i][0]), "volume": v,
+             "strength": round(v/avg_vol, 1)}
             for i, v in enumerate(ask_vols) if is_significant(float(ob.asks[i][0]), v)
         ]
 
@@ -153,8 +157,10 @@ class RealtimeTransformer:
             timestamp=self.fetcher.get_timestamp(ob, market),
             bid_walls=bid_walls,
             ask_walls=ask_walls,
-            strongest_support=max((w["price"] for w in bid_walls), default=None),
-            strongest_resistance=min((w["price"] for w in ask_walls), default=None),
+            strongest_support=max((w["price"]
+                                  for w in bid_walls), default=None),
+            strongest_resistance=min((w["price"]
+                                     for w in ask_walls), default=None),
         )
 
     def transform_liq_spike(self, market, avg_liq_1h=10000):
@@ -169,7 +175,7 @@ class RealtimeTransformer:
         value = float(liq.quantity) * float(liq.price)
         ratio = value / avg_liq_1h if avg_liq_1h > 0 else 0
         is_spike = ratio > 5.0  # 5배 이상 터졌을 때 유의미한 스파이크
-        is_long_liq = liq.side == "SELL" # 롱 포지션이 강제 매도됨
+        is_long_liq = liq.side == "SELL"  # 롱 포지션이 강제 매도됨
 
         # 시그널: 롱 대량 청산 시 '바닥권 매수 기회', 숏 대량 청산 시 '고점 매도 기회'
         if is_spike:
@@ -204,7 +210,7 @@ class RealtimeTransformer:
 
         price_chg = ((close_p - open_p) / open_p) * 100
         vol_ratio = vol / avg_volume if avg_volume > 0 else 0
-        
+
         # 거래량 2.5배 이상 & 가격 0.5% 이상 변화 시 스파이크
         is_vol_spike = vol_ratio > 2.5
         is_price_spike = abs(price_chg) > 0.4

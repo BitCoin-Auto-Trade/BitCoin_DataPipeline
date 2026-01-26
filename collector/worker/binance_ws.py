@@ -66,7 +66,8 @@ class BinanceWebsocketWorker:
 
     def _save_and_queue(self, data_type: str, raw):
         data = raw.to_dict()
-        self.redis.set_hash(f"raw:{self.market}:{data_type}:{SYMBOL}", data, ex=30)
+        self.redis.set_hash(
+            f"raw:{self.market}:{data_type}:{SYMBOL}", data, ex=30)
         self._push_queue(data_type, data)
 
     def _process_kline(self, data: dict):
@@ -81,19 +82,22 @@ class BinanceWebsocketWorker:
         raw = RawAggTrade(**data)
         self._save_and_queue("aggtrade", raw)
         self._publish("aggtrade")
-        self.logger.debug(f"[TRADE] {'SELL' if raw.is_buyer_maker else 'BUY'} {raw.quantity} @ {raw.price}")
+        self.logger.debug(
+            f"[TRADE] {'SELL' if raw.is_buyer_maker else 'BUY'} {raw.quantity} @ {raw.price}")
 
     def _process_orderbook(self, data: dict):
         raw = RawOrderBook(**data)
         self._save_and_queue("orderbook", raw)
         self._publish("orderbook")
-        self.logger.debug(f"[BOOK] Bid: {raw.bids[0][0]} | Ask: {raw.asks[0][0]}")
+        self.logger.debug(
+            f"[BOOK] Bid: {raw.bids[0][0]} | Ask: {raw.asks[0][0]}")
 
     def _process_spot_orderbook(self, data: dict):
         raw = RawSpotOrderBook(**data)
         self._save_and_queue("orderbook", raw)
         self._publish("orderbook")
-        self.logger.debug(f"[BOOK] Bid: {raw.bids[0][0]} | Ask: {raw.asks[0][0]}")
+        self.logger.debug(
+            f"[BOOK] Bid: {raw.bids[0][0]} | Ask: {raw.asks[0][0]}")
 
     def _process_liquidation(self, data: dict):
         raw = RawLiquidation(**data["o"])

@@ -11,7 +11,8 @@ class GCSClient:
         credentials = service_account.Credentials.from_service_account_file(
             GCP_CREDENTIALS_PATH
         )
-        self.client = storage.Client(project=GCP_PROJECT_ID, credentials=credentials)
+        self.client = storage.Client(
+            project=GCP_PROJECT_ID, credentials=credentials)
         self.bucket = self.client.bucket(GCS_BUCKET)
 
     def upload_json(self, blob_name: str, data: dict):
@@ -27,7 +28,8 @@ class GCSClient:
         return json.loads(content)
 
     def list_blobs(self, prefix: str, max_results: int):
-        blobs = self.client.list_blobs(self.bucket, prefix=prefix, max_results=max_results)
+        blobs = self.client.list_blobs(
+            self.bucket, prefix=prefix, max_results=max_results)
         return sorted([b.name for b in blobs], reverse=True)
 
     def get_latest_json(self, prefix: str):

@@ -11,4 +11,5 @@ REDIS_PORT = int(os.getenv('REDIS_PORT', '6379'))
 # GCP 설정
 GCP_PROJECT_ID = os.getenv('GCP_PROJECT_ID')
 GCS_BUCKET = os.getenv('GCS_BUCKET')
-GCP_CREDENTIALS_PATH = os.getenv('GOOGLE_APPLICATION_CREDENTIALS', '/app/gcp-key.json')
+GCP_CREDENTIALS_PATH = os.getenv(
+    'GOOGLE_APPLICATION_CREDENTIALS', '/app/gcp-key.json')

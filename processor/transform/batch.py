@@ -1,5 +1,6 @@
 from shared.models.core import ProcessedOITrend, ProcessedFRHeatmap, ProcessedLSDivergence
 
+
 class BatchTransformer:
     def __init__(self, fetcher):
         self.fetcher = fetcher
@@ -56,7 +57,7 @@ class BatchTransformer:
         deviation = rate - 0.0001
 
         # 8시간마다 결제되는 펀딩비 특성상 0.05% 이상은 매우 극단적인 상태
-        if rate >= 0.05: # 0.05%
+        if rate >= 0.05:  # 0.05%
             heat, risk = "LONG_OVERHEATED", "CRITICAL"
         elif rate >= 0.02:
             heat, risk = "LONG_CROWDED", "HIGH"
@@ -97,12 +98,12 @@ class BatchTransformer:
         # 가격은 급락하는데, 개미들은 겁먹고 숏을 늘림 (LS Ratio 하락) -> 세력의 매집 시점
         if price_change_pct < -2.0 and ls_ratio < 0.8:
             is_div, div_type, signal = True, "BULLISH_CONTRARIAN", "STRONG_BUY_SIGNAL"
-            
+
         # 2. 약세 다이버전스 (Bearish Reversal)
         # 가격은 오르는데, 개미들이 환희에 차서 롱을 늘림 (LS Ratio 급상승) -> 세력의 매도 시점
         elif price_change_pct > 2.0 and ls_ratio > 1.5:
             is_div, div_type, signal = True, "BEARISH_CONTRARIAN", "STRONG_SELL_SIGNAL"
-            
+
         # 3. 롱 트랩 (Long Trap)
         # 가격은 횡보하거나 소폭 하락하는데 롱 비율만 계속 높아짐 -> 개미들만 타 있는 배 (무거움)
         elif abs(price_change_pct) < 0.5 and ls_ratio > 1.3:

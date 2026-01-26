@@ -12,4 +12,5 @@ class RedisLoader:
         self.redis.set_hash(key, to_redis_hash(data.model_dump()), ex=ex)
 
         queue_key = f"queue:core:{data_type}"
-        self.redis.rpush(queue_key, json.dumps(data.model_dump(), ensure_ascii=False))
+        self.redis.rpush(queue_key, json.dumps(
+            data.model_dump(), ensure_ascii=False))
