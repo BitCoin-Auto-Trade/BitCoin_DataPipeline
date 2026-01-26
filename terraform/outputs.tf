@@ -4,6 +4,6 @@ output "instance_ip" {
 }
 
 output "ssh_command" {
-  description = "SSH 접속 명령어"
-  value       = "gcloud compute ssh bitcoin-pipeline --zone=${var.zone}"
+  description = "SSH 접속 명령어 (IAP 터널 사용)"
+  value       = "gcloud compute ssh bitcoin-pipeline --zone=${var.zone} --tunnel-through-iap"
 }

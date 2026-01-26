@@ -63,3 +63,19 @@ resource "google_compute_firewall" "deny_ssh" {
   target_tags   = ["bitcoin-pipeline"]
   priority      = 200
 }
+
+# IAP를 통한 SSH 접속 허용 (GitHub Actions 및 외부 접속용)
+resource "google_compute_firewall" "allow_iap_ssh" {
+  name    = "bitcoin-pipeline-allow-iap-ssh"
+  network = "default"
+
+  allow {
+    protocol = "tcp"
+    ports    = ["22"]
+  }
+
+  # 구글 IAP 서비스의 고정 IP 대역입니다.
+  source_ranges = ["35.235.240.0/20"]
+  target_tags   = ["bitcoin-pipeline"]
+  priority      = 150  # deny_ssh(200)보다 우선순위가 높아야 합니다.
+}
