@@ -8,7 +8,7 @@ services:
       - bitcoin_network
 
   collector:
-    build: ./collector
+    image: asia-northeast3-docker.pkg.dev/poised-standard-484213-a7/bitcoin-pipeline/collector:latest
     container_name: bitcoin_collector
     depends_on:
       - redis
@@ -16,12 +16,11 @@ services:
       - .env
     volumes:
       - ./keys/gcp-key.json:/keys/gcp-key.json:ro
-      - ./shared:/app/shared:ro
     networks:
       - bitcoin_network
 
   processor:
-    build: ./processor
+    image: asia-northeast3-docker.pkg.dev/poised-standard-484213-a7/bitcoin-pipeline/processor:latest
     container_name: bitcoin_processor
     depends_on:
       - redis
@@ -29,7 +28,6 @@ services:
       - .env
     volumes:
       - ./keys/gcp-key.json:/keys/gcp-key.json:ro
-      - ./shared:/app/shared:ro
     networks:
       - bitcoin_network
 

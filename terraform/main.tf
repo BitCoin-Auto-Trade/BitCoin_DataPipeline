@@ -79,3 +79,11 @@ resource "google_compute_firewall" "allow_iap_ssh" {
   target_tags   = ["bitcoin-pipeline"]
   priority      = 150 # deny_ssh(200)보다 우선순위가 높아야 합니다.
 }
+
+# Artifact Registry
+resource "google_artifact_registry_repository" "bitcoin_pipeline" {
+  location      = var.region
+  repository_id = "bitcoin-pipeline"
+  description   = "Docker images for Bitcoin data pipeline"
+  format        = "DOCKER"
+}
