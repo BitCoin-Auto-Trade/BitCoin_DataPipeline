@@ -69,7 +69,7 @@ class RealtimeTransformer:
 
         ratio = (bid_total - ask_total) / total
 
-        # 불균형 강도에 따른 시グ널 세분화
+        # 불균형 강도에 따른 시그널 세분화
         if ratio > 0.4:
             signal = "STRONG_BUY_IMMINE"  # 매수벽이 압도적 (지지선 형성)
         elif ratio > 0.15:
@@ -143,12 +143,12 @@ class RealtimeTransformer:
 
         bid_walls = [
             {"price": float(ob.bids[i][0]), "volume": v,
-             "strength": round(v /avg_vol, 1)}
+             "strength": round(v / avg_vol, 1)}
             for i, v in enumerate(bid_vols) if is_significant(float(ob.bids[i][0]), v)
         ]
         ask_walls = [
             {"price": float(ob.asks[i][0]), "volume": v,
-             "strength": round(v /avg_vol, 1)}
+             "strength": round(v / avg_vol, 1)}
             for i, v in enumerate(ask_vols) if is_significant(float(ob.asks[i][0]), v)
         ]
 
