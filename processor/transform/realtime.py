@@ -143,12 +143,12 @@ class RealtimeTransformer:
 
         bid_walls = [
             {"price": float(ob.bids[i][0]), "volume": v,
-             "strength": round(v/avg_vol, 1)}
+             "strength": round(v /avg_vol, 1)}
             for i, v in enumerate(bid_vols) if is_significant(float(ob.bids[i][0]), v)
         ]
         ask_walls = [
             {"price": float(ob.asks[i][0]), "volume": v,
-             "strength": round(v/avg_vol, 1)}
+             "strength": round(v /avg_vol, 1)}
             for i, v in enumerate(ask_vols) if is_significant(float(ob.asks[i][0]), v)
         ]
 
