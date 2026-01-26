@@ -87,6 +87,10 @@ jobs:
               fi
               cd ~/BitCoin_DataPipeline && \
               git pull origin main && \
+              
+              # Secret에 저장된 전체 내용을 .env 파일로 저장
+              echo \"${{ secrets.ENV_FILE }}\" > .env && \
+              
               sudo gcloud auth configure-docker ${{ env.AR_HOSTNAME }} --quiet && \
               sudo docker compose pull && \
               sudo docker compose down && \
