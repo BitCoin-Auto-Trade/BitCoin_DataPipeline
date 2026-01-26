@@ -88,16 +88,17 @@ jobs:
               # .env 파일 생성
               echo \"${{ secrets.ENV_FILE }}\" > .env && \
               
-              # GCP 키 파일 생성
+              # GCP 키 파일 생성 (Base64 디코딩 방식)
+              mkdir -p keys && \
               rm -rf keys/gcp-key.json && \
-              echo '${{ secrets.GCP_SA_KEY }}' > keys/gcp-key.json && \
+              echo '${{ secrets.GCP_SA_KEY }}' | base64 -d > keys/gcp-key.json && \
+              chmod 600 keys/gcp-key.json && \
               
               sudo gcloud auth configure-docker ${{ env.AR_HOSTNAME }} --quiet && \
               sudo docker compose pull && \
               sudo docker compose down && \
               sudo docker compose up -d
             "
-
       - name: Verify deployment
         run: |
           sleep 10
