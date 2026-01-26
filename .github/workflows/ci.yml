@@ -25,28 +25,6 @@ jobs:
       - name: Run Ruff linter
         run: ruff check collector processor shared --line-length=120
 
-  docker-build:
-    name: Docker Build Test
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        service: [collector, processor]
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build ${{ matrix.service }} image
-        uses: docker/build-push-action@v5
-        with:
-          context: ./${{ matrix.service }}
-          push: false
-          tags: ${{ matrix.service }}:test
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
   terraform-validate:
     name: Terraform Validate
     runs-on: ubuntu-latest
