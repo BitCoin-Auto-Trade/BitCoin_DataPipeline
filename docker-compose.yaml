@@ -18,6 +18,7 @@ services:
       - ./keys/gcp-key.json:/keys/gcp-key.json:ro
     networks:
       - bitcoin_network
+    restart: unless-stopped
 
   processor:
     image: asia-northeast3-docker.pkg.dev/poised-standard-484213-a7/bitcoin-pipeline/processor:latest
