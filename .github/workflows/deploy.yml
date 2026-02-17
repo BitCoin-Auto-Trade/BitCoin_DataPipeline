@@ -101,8 +101,7 @@ jobs:
               
               sudo gcloud auth configure-docker ${{ env.AR_HOSTNAME }} --quiet && \
               sudo docker compose pull && \
-              sudo docker compose down && \
-              sudo docker compose up -d
+              sudo docker compose up -d --remove-orphans
             "
 
       - name: Verify deployment

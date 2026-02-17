@@ -1,17 +1,22 @@
 services:
   redis:
     image: redis:7-alpine
-    container_name: bitcoin_redis
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     ports:
       - "6379:6379"
     networks:
       - bitcoin_network
+    restart: unless-stopped
 
   collector:
     image: asia-northeast3-docker.pkg.dev/poised-standard-484213-a7/bitcoin-pipeline/collector:latest
-    container_name: bitcoin_collector
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
     env_file:
       - .env
     volumes:
@@ -22,15 +27,16 @@ services:
 
   processor:
     image: asia-northeast3-docker.pkg.dev/poised-standard-484213-a7/bitcoin-pipeline/processor:latest
-    container_name: bitcoin_processor
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
     env_file:
       - .env
     volumes:
       - ./keys/gcp-key.json:/keys/gcp-key.json:ro
     networks:
       - bitcoin_network
+    restart: unless-stopped
 
 networks:
   bitcoin_network:
