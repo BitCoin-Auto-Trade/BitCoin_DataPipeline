@@ -82,6 +82,7 @@ jobs:
             --project=${{ secrets.GCP_PROJECT_ID }} \
             --tunnel-through-iap \
             --command="
+              [ -d ~/BitCoin_DataPipeline ] || git clone https://github.com/${{ github.repository }}.git ~/BitCoin_DataPipeline && \
               cd ~/BitCoin_DataPipeline && \
               git pull origin main && \
               
