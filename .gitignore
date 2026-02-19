@@ -12,3 +12,6 @@ logs/
 *.tfstate.backup
 .terraform/
 .terraform.lock.hcl
+
+#pycache
+__pycache__

@@ -38,7 +38,7 @@ resource "google_compute_instance" "bitcoin_pipeline" {
   boot_disk {
     initialize_params {
       image = "ubuntu-os-cloud/ubuntu-2404-lts-amd64"
-      size  = 20
+      size  = 50
     }
   }
 
