@@ -19,20 +19,20 @@ class BatchTransformer:
         oi_chg = ((curr_oi - prev_oi) / prev_oi * 100) if prev_oi > 0 else 0
 
         # 시그널 로직 고도화 (전문 트레이딩 관점)
-        # 1. 상승 + OI 상승: 신규 롱 진입 (추세 강화 - 매우 긍정)
+        # 1. 상승 + OI 상승: 신규 롱 진입 (+1.0)
         if price_change_pct > 0.5 and oi_chg > 1.0:
-            signal = "ACCUMULATION_LONG"
-        # 2. 하락 + OI 상승: 신규 숏 진입 (추세 하락 강화 - 매우 부정)
+            signal = 1.0
+        # 2. 하락 + OI 상승: 신규 숏 진입 (-1.0)
         elif price_change_pct < -0.5 and oi_chg > 1.0:
-            signal = "AGGRESSIVE_SHORTING"
-        # 3. 상승 + OI 하락: 숏 포지션의 강제 청산/손절로 인한 상승 (추세 반전 가능성)
+            signal = -1.0
+        # 3. 상승 + OI 하락: 숏 커버링 (+0.5)
         elif price_change_pct > 0.5 and oi_chg < -1.0:
-            signal = "SHORT_COVERING_RALLY"
-        # 4. 하락 + OI 하락: 롱 포지션의 항복/손절 (바닥 근접 가능성)
+            signal = 0.5
+        # 4. 하락 + OI 하락: 롱 손절 (-0.5)
         elif price_change_pct < -0.5 and oi_chg < -1.0:
-            signal = "LONG_LIQUIDATION_DUMP"
+            signal = -0.5
         else:
-            signal = "NEUTRAL"
+            signal = 0.0
 
         return ProcessedOITrend(
             symbol=self.symbol,
@@ -57,18 +57,20 @@ class BatchTransformer:
         deviation = rate - 0.0001
 
         # 8시간마다 결제되는 펀딩비 특성상 0.05% 이상은 매우 극단적인 상태
+        # heat_level: -1 (Short 과열) ~ 1 (Long 과열)
+        # squeeze_risk: 0 (안전) ~ 1 (위험)
         if rate >= 0.05:  # 0.05%
-            heat, risk = "LONG_OVERHEATED", "CRITICAL"
+            heat, risk = 1.0, 1.0
         elif rate >= 0.02:
-            heat, risk = "LONG_CROWDED", "HIGH"
+            heat, risk = 0.5, 0.7
         elif rate <= -0.05:
-            heat, risk = "SHORT_OVERHEATED", "CRITICAL"
+            heat, risk = -1.0, 1.0
         elif rate <= -0.02:
-            heat, risk = "SHORT_CROWDED", "HIGH"
+            heat, risk = -0.5, 0.7
         elif abs(rate) < 0.01:
-            heat, risk = "STABLE", "LOW"
+            heat, risk = 0.0, 0.1
         else:
-            heat, risk = "NORMAL", "MEDIUM"
+            heat, risk = (0.2 if rate > 0 else -0.2), 0.4
 
         return ProcessedFRHeatmap(
             symbol=self.symbol,
@@ -92,22 +94,19 @@ class BatchTransformer:
         short_r = float(ls_data.short_account)
         ls_ratio = float(ls_data.long_short_ratio)
 
-        is_div, div_type, signal = False, None, "NEUTRAL"
+        is_div, div_type, signal = False, None, 0.0
 
-        # 1. 강세 다이버전스 (Bullish Reversal)
-        # 가격은 급락하는데, 개미들은 겁먹고 숏을 늘림 (LS Ratio 하락) -> 세력의 매집 시점
+        # 1. 강세 다이버전스 (Bullish Reversal) (+1.0)
         if price_change_pct < -2.0 and ls_ratio < 0.8:
-            is_div, div_type, signal = True, "BULLISH_CONTRARIAN", "STRONG_BUY_SIGNAL"
+            is_div, div_type, signal = True, "BULLISH_CONTRARIAN", 1.0
 
-        # 2. 약세 다이버전스 (Bearish Reversal)
-        # 가격은 오르는데, 개미들이 환희에 차서 롱을 늘림 (LS Ratio 급상승) -> 세력의 매도 시점
+        # 2. 약세 다이버전스 (Bearish Reversal) (-1.0)
         elif price_change_pct > 2.0 and ls_ratio > 1.5:
-            is_div, div_type, signal = True, "BEARISH_CONTRARIAN", "STRONG_SELL_SIGNAL"
+            is_div, div_type, signal = True, "BEARISH_CONTRARIAN", -1.0
 
-        # 3. 롱 트랩 (Long Trap)
-        # 가격은 횡보하거나 소폭 하락하는데 롱 비율만 계속 높아짐 -> 개미들만 타 있는 배 (무거움)
+        # 3. 롱 트랩 (Long Trap) (-0.5)
         elif abs(price_change_pct) < 0.5 and ls_ratio > 1.3:
-            is_div, div_type, signal = True, "LONG_TRAP", "WARNING_EXIT_LONG"
+            is_div, div_type, signal = True, "LONG_TRAP", -0.5
 
         return ProcessedLSDivergence(
             symbol=self.symbol,

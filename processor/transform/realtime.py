@@ -34,13 +34,13 @@ class RealtimeTransformer:
         curr_cvd = prev_cvd + delta
 
         # 시그널 판단 로직 (CVD 다이버전스)
-        signal = "NEUTRAL"
+        signal = 0.0
         if price_change_pct > 0.05 and delta < 0:
-            signal = "BEARISH_DIVERGENCE"  # 가격은 오르는데 매도세가 강함 (가짜 상승)
+            signal = -0.7  # BEARISH_DIVERGENCE
         elif price_change_pct < -0.05 and delta > 0:
-            signal = "BULLISH_DIVERGENCE"  # 가격은 내리는데 매수세가 강함 (바닥 다지기)
+            signal = 0.7   # BULLISH_DIVERGENCE
         elif abs(price_change_pct) > 0.1 and (price_change_pct * delta > 0):
-            signal = "TREND_CONFIRMED"     # 가격과 매수/매도 방향이 일치 (강한 추세)
+            signal = 0.5 if delta > 0 else -0.5  # TREND_CONFIRMED
 
         return ProcessedCVD(
             symbol=self.symbol,
@@ -50,7 +50,7 @@ class RealtimeTransformer:
             buy_volume=0 if is_sell else qty,
             sell_volume=qty if is_sell else 0,
             delta=delta,
-            signal=signal  # 모델 필드에 signal이 있다고 가정하거나 추가 필요
+            signal=signal
         )
 
     def transform_book_imbalance(self, market):
@@ -69,17 +69,17 @@ class RealtimeTransformer:
 
         ratio = (bid_total - ask_total) / total
 
-        # 불균형 강도에 따른 시그널 세분화
+        # 불균형 강도에 따른 시그널 세분화 (-1 to 1)
         if ratio > 0.4:
-            signal = "STRONG_BUY_IMMINE"  # 매수벽이 압도적 (지지선 형성)
+            signal = 1.0  # STRONG_BUY_IMMINE
         elif ratio > 0.15:
-            signal = "BUY_PRESSURE"
+            signal = 0.5  # BUY_PRESSURE
         elif ratio < -0.4:
-            signal = "STRONG_SELL_IMMINE"  # 매도벽이 압도적 (저항선 형성)
+            signal = -1.0 # STRONG_SELL_IMMINE
         elif ratio < -0.15:
-            signal = "SELL_PRESSURE"
+            signal = -0.5 # SELL_PRESSURE
         else:
-            signal = "NEUTRAL"
+            signal = 0.0
 
         return ProcessedBookImbalance(
             symbol=self.symbol,
@@ -104,13 +104,13 @@ class RealtimeTransformer:
         spread = best_ask - best_bid
         spread_pct = (spread / best_bid) * 100
 
-        # 비트코인 선물 기준 스프레드 상태 (0.01% 내외가 정상)
+        # liquidity_status: 1.0 (Healthy) to 0.0 (Critical)
         if spread_pct <= 0.015:
-            status = "HEALTHY"
+            status = 1.0  # HEALTHY
         elif spread_pct <= 0.04:
-            status = "THIN_LIQUIDITY"  # 유동성 부족 (작은 물량에도 큰 변동 위험)
+            status = 0.5  # THIN_LIQUIDITY
         else:
-            status = "HIGH_VOLATILITY_ALERT"  # 급변동 중 (매매 주의)
+            status = 0.0  # HIGH_VOLATILITY_ALERT
 
         return ProcessedSpreadAnalysis(
             symbol=self.symbol,
@@ -177,11 +177,11 @@ class RealtimeTransformer:
         is_spike = ratio > 5.0  # 5배 이상 터졌을 때 유의미한 스파이크
         is_long_liq = liq.side == "SELL"  # 롱 포지션이 강제 매도됨
 
-        # 시그널: 롱 대량 청산 시 '바닥권 매수 기회', 숏 대량 청산 시 '고점 매도 기회'
+        # 시그널: 1.0 (Bullish reversal from long liq) to -1.0 (Bearish reversal from short liq)
         if is_spike:
-            signal = "POTENTIAL_BOTTOM" if is_long_liq else "POTENTIAL_TOP"
+            signal = 1.0 if is_long_liq else -1.0
         else:
-            signal = "NEUTRAL"
+            signal = 0.0
 
         return ProcessedLiqSpike(
             symbol=self.symbol,
@@ -216,13 +216,13 @@ class RealtimeTransformer:
         is_price_spike = abs(price_chg) > 0.4
 
         if is_vol_spike and is_price_spike:
-            signal = "VOL_DRIVEN_BREAKOUT" if price_chg > 0 else "VOL_DRIVEN_DUMP"
+            signal = 1.0 if price_chg > 0 else -1.0  # VOL_DRIVEN_BREAKOUT / DUMP
         elif not is_vol_spike and is_price_spike:
-            signal = "LOW_VOL_FAKE_MOVE"    # 거래량 없는 가격 움직임 (트랩 가능성)
+            signal = 0.3 if price_chg > 0 else -0.3   # LOW_VOL_FAKE_MOVE
         elif is_vol_spike and not is_price_spike:
-            signal = "ABSORPTION"           # 거래량은 터지는데 가격이 안 움직임 (물량 소화 중)
+            signal = 0.1                            # ABSORPTION (Indecision)
         else:
-            signal = "NORMAL"
+            signal = 0.0
 
         return ProcessedPriceVolSpike(
             symbol=self.symbol,

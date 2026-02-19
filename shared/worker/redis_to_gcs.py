@@ -19,7 +19,7 @@ class RedisToGCSWorker:
         data_types: List[str],
         redis_key_prefix: str,
         gcs_path_prefix: str,
-        interval_seconds: int = 300,
+        interval_seconds: int,
     ):
         self.redis = redis
         self.gcs = gcs
@@ -65,7 +65,7 @@ class RedisToGCSWorker:
             f"year={now.strftime('%Y')}/"
             f"month={now.strftime('%m')}/"
             f"day={now.strftime('%d')}/"
-            f"{int(time.time())}_{SYMBOL}.parquet"
+            f"{now.strftime('%Y-%m-%d %H:%M')}_{SYMBOL}.parquet"
         )
 
         self.gcs.upload_parquet(blob_name, df)

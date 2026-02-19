@@ -10,7 +10,7 @@ from transform.batch import BatchTransformer
 from load.redis import RedisLoader
 from load.gcs import GCSLoader
 from utils import calc_change_percent
-from shared.utils.constants import CORE_DATA_TYPES
+from shared.utils.constants import CORE_DATA_TYPES, GCS_UPLOAD_INTERVAL
 
 
 class Processor:
@@ -35,6 +35,7 @@ class Processor:
             data_types=CORE_DATA_TYPES,
             redis_key_prefix="queue:core",
             gcs_path_prefix="core",
+            interval_seconds=GCS_UPLOAD_INTERVAL,
         )
 
         self.prev_cvd = 0.0

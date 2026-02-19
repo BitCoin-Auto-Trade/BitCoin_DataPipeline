@@ -22,10 +22,8 @@ class BinanceRestWorker:
                 await asyncio.gather(
                     self._fetch_open_interest(session),
                     self._fetch_funding_rate(session),
+                    self._fetch_long_short_ratio(session),
                 )
-                if self._lsr_counter % 5 == 0:
-                    await self._fetch_long_short_ratio(session)
-                self._lsr_counter += 1
                 await asyncio.sleep(60)
 
     async def _fetch(self, session: aiohttp.ClientSession, endpoint: str, extra_params: dict = None):
@@ -52,7 +50,7 @@ class BinanceRestWorker:
             f"year={now.strftime('%Y')}/"
             f"month={now.strftime('%m')}/"
             f"day={now.strftime('%d')}/"
-            f"{int(time.time())}_{SYMBOL}.parquet"
+            f"{now.strftime('%Y-%m-%d %H:%M')}_{SYMBOL}.parquet"
         )
         self.gcs.upload_parquet(blob_name, df)
 

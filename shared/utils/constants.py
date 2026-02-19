@@ -22,3 +22,6 @@ CORE_DATA_TYPES = [
     "cvd", "book_imbalance", "spread_analysis",
     "wall_detection", "price_vol_spike", "liq_spike",
 ]
+
+# intervals
+GCS_UPLOAD_INTERVAL = 60

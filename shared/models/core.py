@@ -24,6 +24,7 @@ class ProcessedCVD(BaseProcessed):
     buy_volume: float
     sell_volume: float
     delta: float
+    signal: float = 0.0  # -1 (Bearish) to 1 (Bullish)
 
 
 class ProcessedBookImbalance(BaseProcessed):
@@ -31,7 +32,7 @@ class ProcessedBookImbalance(BaseProcessed):
     bid_total: float
     ask_total: float
     imbalance_ratio: float
-    signal: str  # BUY_PRESSURE, SELL_PRESSURE, NEUTRAL
+    signal: float  # -1 to 1
 
 
 class ProcessedSpreadAnalysis(BaseProcessed):
@@ -40,7 +41,7 @@ class ProcessedSpreadAnalysis(BaseProcessed):
     best_ask: float
     spread: float
     spread_percent: float
-    liquidity_status: str  # NORMAL, LOW, CRITICAL
+    liquidity_status: float  # 0 to 1 (Safety/Health score)
 
 
 class ProcessedWallDetection(BaseProcessed):
@@ -59,7 +60,7 @@ class ProcessedLiqSpike(BaseProcessed):
     long_liq_value: float
     short_liq_value: float
     is_spike: bool
-    signal: str  # LONG_SQUEEZE, SHORT_SQUEEZE, NEUTRAL
+    signal: float  # -1 to 1
 
 
 class ProcessedPriceVolSpike(BaseProcessed):
@@ -70,7 +71,7 @@ class ProcessedPriceVolSpike(BaseProcessed):
     volume_ratio: float
     is_price_spike: bool
     is_volume_spike: bool
-    signal: str  # IMPULSE_UP, IMPULSE_DOWN, NORMAL
+    signal: float  # -1 to 1
 
 
 class ProcessedOITrend(BaseProcessed):
@@ -78,15 +79,15 @@ class ProcessedOITrend(BaseProcessed):
     open_interest: float
     oi_change_percent: float
     price_change_percent: float
-    trend_signal: str  # HEALTHY_LONG, HEALTHY_SHORT, WEAK_LONG, WEAK_SHORT, NEUTRAL
+    trend_signal: float  # -1 to 1
 
 
 class ProcessedFRHeatmap(BaseProcessed):
     """FR Heatmap - 소스: Funding Rate"""
     funding_rate: float
     deviation: float
-    heat_level: str  # EXTREME_LONG, HIGH_LONG, NORMAL, HIGH_SHORT, EXTREME_SHORT
-    squeeze_risk: str  # HIGH, MEDIUM, LOW
+    heat_level: float  # -1 to 1
+    squeeze_risk: float  # 0 to 1
 
 
 class ProcessedLSDivergence(BaseProcessed):
@@ -96,5 +97,5 @@ class ProcessedLSDivergence(BaseProcessed):
     ls_ratio: float
     price_change_percent: float
     is_divergence: bool
-    divergence_type: Optional[str]  # BEARISH_DIV, BULLISH_DIV
-    signal: str  # CONTRARIAN_SHORT, CONTRARIAN_LONG, NEUTRAL
+    divergence_type: Optional[str]
+    signal: float  # -1 to 1
