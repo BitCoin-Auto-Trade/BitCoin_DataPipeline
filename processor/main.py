@@ -40,9 +40,12 @@ class Processor:
 
         self.prev_cvd = 0.0
         self.prev_oi = 0.0
+        self.price_change_pct = {}  # market별 최신 kline 가격변화율
+        self.avg_volume = {}        # market별 거래량 EMA
 
     def _handle_aggtrade(self, market):
-        result = self.realtime.transform_cvd(market, self.prev_cvd)
+        price_chg = self.price_change_pct.get(market, 0.0)
+        result = self.realtime.transform_cvd(market, self.prev_cvd, price_chg)
         if result:
             self.prev_cvd = result.cvd
             self.redis_loader.save("cvd", result)
@@ -67,10 +70,21 @@ class Processor:
                     f"[WALL] support={wall.strongest_support} resistance={wall.strongest_resistance}")
 
     def _handle_kline_closed(self, market):
-        if result := self.realtime.transform_price_vol_spike(market):
+        kline = self.realtime.fetcher.get_kline(market)
+        if kline:
+            open_p = float(kline.open_price)
+            close_p = float(kline.close_price)
+            vol = float(kline.volume)
+            self.price_change_pct[market] = calc_change_percent(close_p, open_p)
+            # 거래량 EMA (alpha=0.1 ≈ 약 19봉 이동평균 가중치)
+            prev_avg = self.avg_volume.get(market, 0.0)
+            self.avg_volume[market] = vol if prev_avg == 0 else 0.1 * vol + 0.9 * prev_avg
+
+        avg_vol = self.avg_volume.get(market, 0.0)
+        if result := self.realtime.transform_price_vol_spike(market, avg_vol):
             self.redis_loader.save("price_vol_spike", result)
             self.logger.info(
-                f"[SPIKE] {result.signal} price={result.price_change_percent:.2f}%")
+                f"[SPIKE] {result.signal} price={result.price_change_percent:.2f}% vol_ratio={result.volume_ratio:.2f}")
 
     def _handle_liquidation(self, market):
         if result := self.realtime.transform_liq_spike(market):

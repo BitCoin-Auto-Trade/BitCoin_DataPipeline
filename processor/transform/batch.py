@@ -56,18 +56,19 @@ class BatchTransformer:
         # 비트코인 기본 펀딩비는 0.01%(0.0001)임. 이보다 높으면 롱 과열, 낮으면 숏 과열.
         deviation = rate - 0.0001
 
-        # 8시간마다 결제되는 펀딩비 특성상 0.05% 이상은 매우 극단적인 상태
+        # 8시간마다 결제되는 펀딩비 특성상 0.05%(=0.0005) 이상은 매우 극단적인 상태
+        # Binance 펀딩비는 소수 형식: 0.0001 = 0.01%, 0.0005 = 0.05%
         # heat_level: -1 (Short 과열) ~ 1 (Long 과열)
         # squeeze_risk: 0 (안전) ~ 1 (위험)
-        if rate >= 0.05:  # 0.05%
+        if rate >= 0.0005:  # 0.05%
             heat, risk = 1.0, 1.0
-        elif rate >= 0.02:
+        elif rate >= 0.0002:  # 0.02%
             heat, risk = 0.5, 0.7
-        elif rate <= -0.05:
+        elif rate <= -0.0005:  # -0.05%
             heat, risk = -1.0, 1.0
-        elif rate <= -0.02:
+        elif rate <= -0.0002:  # -0.02%
             heat, risk = -0.5, 0.7
-        elif abs(rate) < 0.01:
+        elif abs(rate) < 0.0001:  # 0.01% 미만 (중립)
             heat, risk = 0.0, 0.1
         else:
             heat, risk = (0.2 if rate > 0 else -0.2), 0.4
