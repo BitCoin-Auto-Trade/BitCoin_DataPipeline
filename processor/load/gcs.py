@@ -16,9 +16,10 @@ class GCSLoader:
 
         blob_name = (
             f"core/{data_type}/"
+            f"symbol={self.symbol}/"
             f"year={now.strftime('%Y')}/"
             f"month={now.strftime('%m')}/"
             f"day={now.strftime('%d')}/"
-            f"{now.strftime('%Y-%m-%d %H:%M')}_{self.symbol}.parquet"
+            f"{now.strftime('%H:%M')}.parquet"
         )
         self.gcs.upload_parquet(blob_name, df)

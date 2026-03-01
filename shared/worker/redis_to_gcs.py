@@ -62,10 +62,11 @@ class RedisToGCSWorker:
 
         blob_name = (
             f"{self.gcs_path_prefix}/{data_type}/"
+            f"symbol={SYMBOL}/"
             f"year={now.strftime('%Y')}/"
             f"month={now.strftime('%m')}/"
             f"day={now.strftime('%d')}/"
-            f"{now.strftime('%Y-%m-%d %H:%M')}_{SYMBOL}.parquet"
+            f"{now.strftime('%H:%M')}.parquet"
         )
 
         self.gcs.upload_parquet(blob_name, df)
